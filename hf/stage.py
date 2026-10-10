@@ -30,6 +30,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 NAMES = ("tetris", "snake", "base")
 SKIP = {".DS_Store", ".gitattributes"}
+SOURCE_URL = "https://github.com/Anemll/system1-ane"  # every model card, NOTICE and config.json links here
 
 
 def clone_tree(src: Path, dst: Path) -> None:
@@ -127,6 +128,8 @@ def stage(name: str, src: Path, out: Path, weights: Path | None = None) -> Path:
     write_descriptor(name, dest)  # root-level config.json (Hugging Face counts downloads by it)
     card = HERE / name / "README.md"
     if card.is_file():
+        if SOURCE_URL not in card.read_text():
+            raise SystemExit(f"{card}: the model card must link the source repo {SOURCE_URL}")
         shutil.copyfile(card, dest / "README.md")
     for extra in ("LICENSE", "NOTICE"):
         if (HERE / extra).is_file():

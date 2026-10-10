@@ -6,6 +6,12 @@
 - Optional Unsloth-trained stock Qwen3.5-0.8B Snake adapter (`snake-stock`): host-side Clef head engine (host fp32 default, optional fp16 ANE head), LoRA merge and verification scripts under `scripts/unsloth/`, serving how-to in `docs/SYSTEM1_ANE_SERVE.md`; prebuilt on Hugging Face as `anemll/system1-base-unsloth` (folder `snake-stock-qwen3.5-unsloth/`, `scripts/download_model.py snake-stock-qwen3.5-unsloth`). Jeff remains the default; the three original downloads are unchanged.
 
 ### Fixed
+- `scripts/unsloth/make_snake_data.py` now writes a validation set with no board in the training set (5 of 256 validation boards used to appear in the 2,048 training rows; they are replaced in place, the other rows keep their index). The published Unsloth accuracies were measured on the earlier split (5 of 256 validation states also appeared in training); remeasurement on the deduplicated split pending.
+- Clef (Unsloth) adapters: the prompt token count is checked against the server's max-tokens limit before the backbone runs (HTTP 422, same message as other builds); `score` and `noul` questions get a 422 (the joint-schema head is trained on choice fields only) instead of a 500.
+- `jeff-train-lora --train-until` is applied to the two timed warm-up steps too (an expired deadline no longer enters the optimizer).
+- `scripts/unsloth/run_stock_snake.py` reads `heldout.jsonl` only for `--parity`, `--heldout` and the default run.
+- `scripts/download_model.py snake-stock-qwen3.5-unsloth` now lands in `$JEFF_MODELS_DIR/snake-stock-qwen3.5-unsloth/{coreai,model}` like the other builds (an older nested copy is flattened on the next run).
+- README / docs: one example port (8796), the compile loop includes the stock build, Python 3.11 and the Core AI SDK venv setup, `python forge.py system1-ane-serve`.
 - Decision-package loader (`coreai/jeff_coreai_runtime.py`), `forge.py` build detection and `graph_line` now accept manifest `"kind": "decision"` as well as the original `"jeff-decision"`, so published builds can carry a neutral manifest. Writers still emit `jeff-decision`.
 
 ## v0.1.0 — 2026-10-09 — first standalone release

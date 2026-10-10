@@ -19,6 +19,8 @@ tags:
 
 **Unofficial** Core AI conversion of [mstrasser/jeff-base](https://huggingface.co/mstrasser/jeff-base) (Jeff v1.3, a Qwen3.5-0.8B fine-tune) by [Anemll](https://github.com/Anemll/system1-ane). No retraining: the weights are Jeff's, converted to six 4-layer `.aimodel` chunks plus the 255-way readout head, all `fully_ane` on an M5 Max. You send a situation and named options; one forward pass returns a calibrated probability per option (about 65 ms for a short decision).
 
+**Source / code:** [github.com/Anemll/system1-ane](https://github.com/Anemll/system1-ane) (MIT): runtime, demo, training and conversion code.
+
 ## What's here
 
 | Path | What |
@@ -37,8 +39,8 @@ git clone https://github.com/Anemll/system1-ane.git && cd system1-ane
 python scripts/download_model.py base
 export COREAI_PYTHON=/path/to/coreai-sdk/bin/python
 python forge.py compile --build ~/Models/jeff-ane/base/coreai
-python forge.py system1-ane-serve --model ~/Models/jeff-ane/base/model --build ~/Models/jeff-ane/base/coreai --port 8787
-# open http://127.0.0.1:8787/ (routing panel)
+python forge.py system1-ane-serve --model ~/Models/jeff-ane/base/model --build ~/Models/jeff-ane/base/coreai --port 8796
+# open http://127.0.0.1:8796/ (routing panel)
 ```
 
 Jeff v1.3 is meant to be used with task adapters; on its own it is weak on unfamiliar tasks with long option lists (see the jeff-base card).

@@ -1,5 +1,9 @@
 # Core AI conversion SDK (macOS). Install into COREAI_PYTHON, not the host .venv.
 # Pins match the M5 Max Jeff convert (macOS 27, 7 October 2026).
+# coreai-core 1.0.0b2 is a pre-release on PyPI with wheels for Python 3.11-3.13 on macOS arm64 (Python 3.9, the macOS system
+# Python, finds no matching distribution). coreai-core also provides coreai.runtime, which compile + serve need on their own.
+# Newer releases exist (coreai-core 1.0.0b3, coreai-torch 0.4.3 which pins coreai-core==1.0.0b3, coreai-opt 0.3.0); this repo
+# has only been tested with the pins below, so b3 is untested here.
 coreai-core==1.0.0b2
 coreai-opt==0.2.1
 coreai-torch==0.4.2

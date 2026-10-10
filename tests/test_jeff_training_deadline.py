@@ -86,6 +86,32 @@ class DeadlineTests(unittest.TestCase):
         self.assertTrue(stats['stopped_early'])
         self.assertTrue(torch.equal(before, head.weight))
 
+    def test_expired_deadline_skips_the_warmup_optimizer_steps(self):
+        model, head = Tiny(), torch.nn.Linear(4, 2)
+        layers = [SimpleNamespace(A=torch.zeros(1, 1), B=torch.zeros(1, 1))]
+        before = head.weight.detach().clone()
+        steps = []
+        def make_optimizer():
+            optimizer = torch.optim.SGD(head.parameters(), lr=.1)
+            optimizer.step = lambda *args, **kwargs: steps.append(1)
+            return optimizer
+        rows = [{'ids': [1, 2], 'label': 0, 'n': 2}] * 4
+        with torch.no_grad():
+            timed = jeff_lora_train.timed_warmup(model, head, layers, rows, 2, 0, 'cpu', make_optimizer,
+                                                 stop_at=time.time() - 1)
+        self.assertEqual((steps, timed['n'], timed['stopped_early']), ([], 0, True))
+        self.assertTrue(torch.equal(before, head.weight))
+        with torch.no_grad():  # a live deadline still runs both warm-up steps and restores the weights afterwards
+            timed = jeff_lora_train.timed_warmup(model, head, layers, rows, 2, 0, 'cpu', make_optimizer,
+                                                 stop_at=time.time() + 60)
+        self.assertEqual((len(steps), timed['n'], timed['stopped_early']), (2, 4, False))
+        self.assertTrue(torch.equal(before, head.weight))
+
+    def test_main_passes_the_deadline_to_the_warmup(self):
+        source = inspect.getsource(jeff_lora_train.main)
+        self.assertIn('timed_warmup(backbone, readout, layers, train_enc, a.batch, pad_id, device, make_optimizer, stop_at)',
+                      source)
+
     def test_completed_steps_call_recovery_hook(self):
         model, head = Tiny(), torch.nn.Linear(4, 2)
         calls = []

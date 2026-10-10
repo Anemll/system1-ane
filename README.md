@@ -9,7 +9,7 @@ The pipeline covers the whole loop: train a LoRA, merge it, export a prefill-onl
 | Model | Status |
 | --- | --- |
 | **Jeff v1.3** ([mstrasser/jeff-base](https://huggingface.co/mstrasser/jeff-base), a fine-tune of Qwen3.5-0.8B) | **Primary model, verified.** Everything in this README (training, conversion, ANE placement, benchmarks, demos) was run and measured on Jeff. |
-| Stock **Qwen3.5-0.8B** ([Qwen/Qwen3.5-0.8B](https://huggingface.co/Qwen/Qwen3.5-0.8B)) | **Optional extra, not the default: Jeff stays the default model and adapter.** An Unsloth-trained stock Qwen3.5-0.8B Snake adapter: **87.1%** held-out in Colab, **85.2%** on the ANE, about 91 ms per decision (the shipped Jeff Snake: 63.7 ms; not controlled benchmarks). Download: `python scripts/download_model.py snake-stock-qwen3.5-unsloth` ([anemll/system1-base-unsloth](https://huggingface.co/anemll/system1-base-unsloth)). Recipe and run order: [scripts/unsloth/README.md](scripts/unsloth/README.md); numbers: [docs/RESULTS.md](docs/RESULTS.md), details: [docs/STOCK_BASE_RESULTS.md](docs/STOCK_BASE_RESULTS.md); serving: [how-to](docs/SYSTEM1_ANE_SERVE.md#serving-the-unsloth-trained-stock-snake-adapter-optional). Training logs and weights are not in this repository (the weights are on Hugging Face). |
+| Stock **Qwen3.5-0.8B** ([Qwen/Qwen3.5-0.8B](https://huggingface.co/Qwen/Qwen3.5-0.8B)) | **Optional extra, not the default: Jeff stays the default model and adapter.** An Unsloth-trained stock Qwen3.5-0.8B Snake adapter: **87.1%** held-out in Colab, **85.2%** on the ANE, about 91 ms per decision (the shipped Jeff Snake: 63.7 ms; not controlled benchmarks). The accuracies were measured on the earlier split (5 of 256 validation states also appeared in training); remeasurement on the deduplicated split pending. Download: `python scripts/download_model.py snake-stock-qwen3.5-unsloth` ([anemll/system1-base-unsloth](https://huggingface.co/anemll/system1-base-unsloth)). Recipe and run order: [scripts/unsloth/README.md](scripts/unsloth/README.md); numbers: [docs/RESULTS.md](docs/RESULTS.md), details: [docs/STOCK_BASE_RESULTS.md](docs/STOCK_BASE_RESULTS.md); serving: [how-to](docs/SYSTEM1_ANE_SERVE.md#serving-the-unsloth-trained-stock-snake-adapter-optional). Training logs and weights are not in this repository (the weights are on Hugging Face). |
 
 Task adapters (LoRA plus a choice head) are trained with this repo's own trainer (`forge.py jeff-train-lora`, PyTorch on Apple MPS). Jeff and Qwen3.5-0.8B LoRA adapters are compatible with [Unsloth](https://unsloth.ai) training, which uses the same Qwen stack (see Credits). The Tetris and Snake adapters shipped here were trained **locally on an Apple M5 Max with PyTorch MPS** using this repo's code, not with Unsloth.
 
@@ -17,7 +17,7 @@ Task adapters (LoRA plus a choice head) are trained with this repo's own trainer
 
 This checkout used to be a copy of [Anemll/anemll-forge](https://github.com/Anemll/anemll-forge) (Qwen3.8-27B toolkit). It is now a standalone tree for fast System 1 decision models. Shared Core AI graph/runtime files it still imports keep their original paths and are marked as originating from anemll-forge. See [docs/ORIGIN.md](docs/ORIGIN.md) and [HISTORY.md](HISTORY.md). It is the primary repository for ongoing development, including the Tetris training subproject; see the [workspace handoff](docs/WORKSPACE.md) for the migration scope and external artifacts.
 
-Commands: `system1-ane-serve` runs the server; `jeff-convert`, `jeff-train-lora` and `jeff-smoke` are the Jeff model tools.
+Commands are subcommands of `forge.py` (there is no installed `system1-ane-serve` executable): `python forge.py system1-ane-serve` runs the server; `jeff-convert`, `jeff-train-lora` and `jeff-smoke` are the Jeff model tools.
 
 ## Results (Apple M5 Max)
 
@@ -55,16 +55,16 @@ Screenshots of the browser demo served by `system1-ane-serve` on an M5 Max (ever
 
 ## Requirements
 
-- **Apple Silicon Mac** (measured on **M5 Max**; M5 family uses bonded compile mode 1, M6+ uses mode 2)
-- **macOS with Core AI** (the conversion SDK and `coreai.runtime`; the Swift bridge builds with Xcode / `xcrun swiftc`)
-- **Python 3.11+** host venv (transformers, torch) for train / tokenize / `forge.py`
-- **Core AI SDK Python** (`COREAI_PYTHON`) for convert, compile, and `system1-ane-serve` (it loads the ANE packages). **Set `COREAI_PYTHON` whenever you run `forge.py` from the host venv** — otherwise those commands would use the host interpreter, which has no Core AI.
+- **Apple Silicon Mac** (measured on **M5 Max**, macOS 27.2). The ANE compile mode is chosen per chip and can differ between Macs: M5 family uses bonded mode 1, M6 uses mode 2 (override: `MPSGRAPH_ANE_BONDED_COMPILE_MODE`; see [docs/ANE_COMPILE_MODE_POLICY.md](docs/ANE_COMPILE_MODE_POLICY.md)). A fresh-machine run on an **M6** (macOS 27.0.1, mode 2) loaded all four builds below together.
+- **macOS 27 with Core AI** (the Swift bridge builds with Xcode / `xcrun swiftc`).
+- **Python 3.11+** for the host venv (transformers, torch: train / tokenize / `forge.py`). macOS's own `/usr/bin/python3` is 3.9 and will not work: install 3.11 (for example `brew install python@3.11`) and use `python3.11`.
+- **Core AI SDK Python** (`COREAI_PYTHON`): a separate venv, Python 3.11-3.13, created in Quick start step 2 from the Core AI packages on PyPI. Compile and serve need only `coreai-core` (it provides `coreai.runtime`); convert also needs `coreai-torch` and `coreai-opt` ([requirements-conversion.txt](requirements-conversion.txt)). **Set `COREAI_PYTHON` whenever you run `forge.py` from the host venv**, otherwise those commands use the host interpreter, which has no Core AI.
 
 Model weights are not in Git. `scripts/download_model.py` fetches the prebuilt Core AI demo builds from Hugging Face; training uses a local `jeff-base` v1.3 checkpoint.
 
 ## Quick start (prebuilt models)
 
-Three demo builds are published as exported Core AI packages (1.5 GB each, base 3.2 GB; see [docs/MODELS.md](docs/MODELS.md)):
+Three demo builds, plus the optional Unsloth stock Snake build, are published as exported Core AI packages (1.5 GB each, base 3.2 GB; see [docs/MODELS.md](docs/MODELS.md)):
 
 | Name | Hugging Face | Used for |
 | --- | --- | --- |
@@ -73,26 +73,33 @@ Three demo builds are published as exported Core AI packages (1.5 GB each, base 
 | `base` | [anemll/jeff-ane-base-coreai](https://huggingface.co/anemll/jeff-ane-base-coreai) | jeff-base v1.3: routing panel and the server's `--model` |
 | `snake-stock-qwen3.5-unsloth` (optional extra, not in the default set) | [anemll/system1-base-unsloth](https://huggingface.co/anemll/system1-base-unsloth), folder [`snake-stock-qwen3.5-unsloth/`](https://huggingface.co/anemll/system1-base-unsloth/tree/main/snake-stock-qwen3.5-unsloth) | Unsloth-trained stock Qwen3.5-0.8B Snake adapter, served as `--adapter snake-stock=<build>/coreai` ([how-to](docs/SYSTEM1_ANE_SERVE.md#serving-the-unsloth-trained-stock-snake-adapter-optional)). Jeff remains the default. |
 
+**Source / code:** https://github.com/Anemll/system1-ane. Every Hugging Face card above links back to it.
+
 ```sh
 git clone https://github.com/Anemll/system1-ane.git
 cd system1-ane
 
-# 1. Host venv (tokenizer, forge.py, download, tests)
+# 1. Host venv (tokenizer, forge.py, download, tests). Needs Python 3.11+, not the macOS 3.9: brew install python@3.11
 python3.11 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
 python -m pip install -r requirements-inference.txt
 
-# 2. Core AI SDK interpreter (loads/compiles ANE packages). Required whenever forge.py runs from the host venv.
-export COREAI_PYTHON=/path/to/coreai-sdk/bin/python
+# 2. Core AI SDK interpreter (loads/compiles ANE packages): its own venv (Python 3.11-3.13), pinned to the version this repo was tested with.
+#    coreai-core is enough for compile + serve; torch is also needed to serve the stock Unsloth build.
+#    For convert, also: pip install -r requirements-conversion.txt
+python3.11 -m venv "$HOME/venvs/coreai"
+"$HOME/venvs/coreai/bin/python" -m pip install --upgrade pip
+"$HOME/venvs/coreai/bin/python" -m pip install coreai-core==1.0.0b2 "torch>=2.6"
+export COREAI_PYTHON="$HOME/venvs/coreai/bin/python"   # required whenever forge.py runs from the host venv
 bash coreai/swift_bridge/build.sh     # writes coreai/swift_bridge/libcoreai_bridge.dylib (default loader path)
 
 # 3. Download the builds (default ~/Models/jeff-ane; override with JEFF_MODELS_DIR)
 export JEFF_MODELS_DIR="${JEFF_MODELS_DIR:-$HOME/Models/jeff-ane}"
-python scripts/download_model.py tetris snake base
+python scripts/download_model.py tetris snake base snake-stock-qwen3.5-unsloth   # the last is the optional Unsloth extra; drop it to skip
 
 # 4. Compile once per Mac (cache is keyed by macOS build and COREAI_PYTHON)
-for m in base snake tetris; do python forge.py compile --build "$JEFF_MODELS_DIR/$m/coreai"; done
+for m in base snake tetris snake-stock-qwen3.5-unsloth; do python forge.py compile --build "$JEFF_MODELS_DIR/$m/coreai"; done
 
 # 5. Serve the demo
 export SYSTEM1_ANE_QUEUE_MS=1500   # live demo: wait this long before 529 on a busy server
@@ -101,15 +108,16 @@ python forge.py system1-ane-serve \
   --build "$JEFF_MODELS_DIR/base/coreai" \
   --adapter snake="$JEFF_MODELS_DIR/snake/coreai" \
   --adapter tetris="$JEFF_MODELS_DIR/tetris/coreai" \
-  --host 127.0.0.1 --port 8787
+  --adapter snake-stock="$JEFF_MODELS_DIR/snake-stock-qwen3.5-unsloth/coreai" \
+  --host 127.0.0.1 --port 8796
 ```
 
-Open http://127.0.0.1:8787/ — Snake and Tetris, each move one Jeff decision, plus a routing panel on the base build.
+Open http://127.0.0.1:8796/ — Snake and Tetris, each move one Jeff decision, plus a routing panel on the base build (8796 is just an example spare port; use any free one, and the same port in every command below). Each build is `$JEFF_MODELS_DIR/<name>/{coreai,model}`.
 
 ```sh
 # Without --adapter the request hits the base model, even when snake/tetris are loaded.
-python examples/decide_http.py --url http://127.0.0.1:8787 --game snake --adapter snake
-python examples/decide_http.py --url http://127.0.0.1:8787 --game tetris --adapter tetris
+python examples/decide_http.py --url http://127.0.0.1:8796 --game snake --adapter snake
+python examples/decide_http.py --url http://127.0.0.1:8796 --game tetris --adapter tetris
 ```
 
 Already have the October 8 training output locally? Its `build/` directory has the same `coreai/` + `model/` layout,
@@ -165,7 +173,7 @@ python forge.py jeff-convert \
 ```sh
 python forge.py compile --build "$HOME/Models/jeff-coreai/adapters/snake/coreai"
 python forge.py system1-ane-serve --model "$BASE_MODEL" --build "$HOME/Models/jeff-coreai/coreai" \
-  --adapter snake="$HOME/Models/jeff-coreai/adapters/snake/coreai" --port 8787
+  --adapter snake="$HOME/Models/jeff-coreai/adapters/snake/coreai" --port 8796
 ```
 
 Convert, compile, and serve must use the same `COREAI_PYTHON`.

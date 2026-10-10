@@ -15,7 +15,8 @@ Each build lands in $JEFF_MODELS_DIR/<name>/ (default ~/Models/jeff-ane) with th
 
 `snake-stock-qwen3.5-unsloth` is an optional extra adapter (stock Qwen3.5-0.8B + Unsloth Snake head, 304-token prefill). It is a folder
 of the repo `anemll/system1-base-unsloth`: only the root `config.json` and `snake-stock-qwen3.5-unsloth/*` are fetched, and the build lands in
-$JEFF_MODELS_DIR/snake-stock-qwen3.5-unsloth/snake-stock-qwen3.5-unsloth/. If the repo cannot be reached, the download stops with a clear message
+$JEFF_MODELS_DIR/snake-stock-qwen3.5-unsloth/{coreai,model}, the same layout as the other builds (an older nested
+.../snake-stock-qwen3.5-unsloth/snake-stock-qwen3.5-unsloth/ copy is flattened on the next run). If the repo cannot be reached, the download stops with a clear message
 (NOT_REACHABLE_HINT below). It is never part of the default set; Jeff stays the default.
 
 The packages are exported, not compiled: run `python forge.py compile --build <dir>/coreai` once per Mac.
@@ -25,6 +26,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import shutil
 import sys
 from pathlib import Path
 
@@ -39,6 +41,23 @@ DEFAULT_ORDER = ("tetris", "snake", "base")
 EXTRA = "snake-stock-qwen3.5-unsloth"
 MODELS[EXTRA] = ("anemll/system1-base-unsloth", "OPTIONAL extra adapter: Unsloth-trained stock Snake (folder %s/; Clef head, 304-token prefill)" % EXTRA)
 NOT_REACHABLE_HINT = " The Unsloth model repo may not be reachable yet; check %s." % MODELS[EXTRA][0]  # remove once the upload is confirmed live
+
+
+EXTRA_NEED = ("coreai/manifest.json", "coreai/clef_head/joint_head.safetensors", "model/decision_config.json", "model/tokenizer.json")
+
+
+def _have(build: Path, need) -> bool:
+    return all((build / p).is_file() for p in need)
+
+
+def _hoist(src: Path, dest: Path) -> None:
+    """Move everything under ``src`` into ``dest`` (replacing same-named files), then remove ``src``."""
+    for path in sorted(src.rglob("*")):
+        if path.is_file():
+            target = dest / path.relative_to(src)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            os.replace(path, target)
+    shutil.rmtree(src, ignore_errors=True)
 
 
 def models_dir() -> Path:
@@ -65,10 +84,19 @@ def download(name: str, root: Path, revision: str | None) -> Path:
                              f"and HF_TOKEN if the repo is private. Or point {env_name} at another repo.")
         raise
     if folder:
-        snapshot_download(repo, revision=revision, local_dir=dest, allow_patterns=["config.json", f"{folder}/*", f"{folder}/**"])
-        build = dest / folder
-        need = ("coreai/manifest.json", "coreai/clef_head/joint_head.safetensors", "model/decision_config.json", "model/tokenizer.json")
-        missing = [p for p in need if not (build / p).is_file()]
+        build = dest
+        if not _have(build, EXTRA_NEED):
+            nested = dest / folder  # older versions of this script left the build one folder deeper
+            if _have(nested, EXTRA_NEED):
+                _hoist(nested, dest)
+            else:
+                # Download beside the destination, then move the folder's contents up so the build is <dest>/{coreai,model}.
+                stage = root / f".{name}.download"
+                snapshot_download(repo, revision=revision, local_dir=stage,
+                                  allow_patterns=["config.json", f"{folder}/*", f"{folder}/**"])
+                _hoist(stage / folder, dest)
+                shutil.rmtree(stage, ignore_errors=True)
+        missing = [p for p in EXTRA_NEED if not (build / p).is_file()]
         if missing:
             raise SystemExit(f"{repo}: folder {folder}/ is missing {missing} (is the upload complete?)")
         return build
@@ -107,7 +135,7 @@ def main(argv: list[str] | None = None) -> int:
     for name in a.names or DEFAULT_ORDER:
         print(f"  python forge.py compile --build {dests[name] / 'coreai'}")
     if EXTRA in dests:
-        print(f"Then serve it as an extra adapter: system1-ane-serve --adapter snake-stock={dests[EXTRA] / 'coreai'} ...")
+        print(f"Then serve it as an extra adapter: python forge.py system1-ane-serve --adapter snake-stock={dests[EXTRA] / 'coreai'} ...")
     return 0
 
 

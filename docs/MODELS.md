@@ -1,5 +1,7 @@
 # Models and distribution
 
+**Source / code:** https://github.com/Anemll/system1-ane. Every Hugging Face card, `NOTICE` and `config.json` below links back to it (`hf/stage.py` refuses to stage a card without that link).
+
 Weights are not stored in Git. The three demo builds are published on Hugging Face under the `anemll` org as
 **exported** Core AI packages (compile once per Mac). Every repo has a root-level `config.json` (Hugging Face counts
 downloads by it) and `scripts/download_model.py` fetches that file first.
@@ -26,6 +28,8 @@ model/                 tokenizer.json, tokenizer_config.json, chat_template.jinj
 `system1-ane-serve --model` loads the full backbone checkpoint (embeddings, final norm, shape checks), so only the **base** repo carries `model/model.safetensors` (1.7 GB, unchanged from jeff-base v1.3). Snake and Tetris are served as `--adapter` beside the base; their `model/` folders are for reference/standalone tooling. `--build` / `--adapter` take `coreai/`.
 
 ## Download
+
+The Core AI packages come from `pip install` of `coreai-core` (compile + serve; it provides `coreai.runtime`), plus `coreai-torch` and `coreai-opt` for convert (`requirements-conversion.txt`). `coreai-core==1.0.0b2` is on PyPI for Python 3.11-3.13 on macOS arm64; the macOS system Python (3.9) cannot install it, so create the SDK venv with Python 3.11 (README, Quick start step 2). Newer releases exist (coreai-core 1.0.0b3 from 24 Sep 2026, which also adds Python 3.14 wheels; coreai-torch 0.4.3 pins it); this repository has only been run with the pins in `requirements-conversion.txt`, and what b3 changes for these builds has not been checked. Fresh-machine check on an M6 (macOS 27.0.1, compile mode 2): base, snake, tetris and snake-stock all loaded together in one server.
 
 ```sh
 python scripts/download_model.py                  # tetris, snake, base -> $JEFF_MODELS_DIR (default ~/Models/jeff-ane)

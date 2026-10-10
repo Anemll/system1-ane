@@ -11,7 +11,7 @@ Usage (STOCK_BUILD is required: a build directory holding coreai/ and model/, se
   ... --games 8 --seed 0    # live Snake games (the repository's Snake generator, opening_states)
   ... --state-json s.json   # {"state": {...}, "instructions": "...", "options": {...}} or a Snake
                             # {"snake": [[r,c],...], "food": [r,c]}
-  ... --heldout 256         # accuracy on the held-out rows (87.1% in Colab, 85.2% measured here); needs STOCK_HELDOUT
+  ... --heldout 256         # accuracy on the held-out rows (87.1% in Colab, 85.2% measured here, both on the earlier split with 5 of 256 states also in training); needs STOCK_HELDOUT
 Env: STOCK_BUILD (required), STOCK_HELDOUT (heldout.jsonl from make_snake_data.py; default ./snake_data/heldout.jsonl),
 STOCK_PARITY (default: the rows shipped next to this script), STOCK_REPORT (default ./run_stock_snake_report.json),
 CLEF_HEAD_BACKEND=host|ane, COREAI_PYTHON (interpreter with the Core AI runtime; default: the current one),
@@ -87,6 +87,11 @@ def decide(eng, tok, state, instructions=INSTRUCTIONS, options=None):
             "head_ms": float(r["head_ms"]), "total_ms": tok_ms + float(sum(r["calls_ms"])) + float(r["head_ms"]), "enc": enc}
 
 
+def load_heldout(path):
+    with open(path) as f:
+        return [json.loads(line) for line in f]
+
+
 def fmt(d):
     pr = " ".join(f"{k}={v:.3f}" for k, v in d["probabilities"].items())
     return (f"{d['move']:<5} conf {d['confidence']:.3f} | {pr} | {d['tokens']} tok | tokenize {d['tokenize_ms']:.1f} ms, "
@@ -106,7 +111,8 @@ def main():
     print(f"stock Qwen3.5-0.8B + Unsloth Snake LoRA/Clef head | {rt.entry} | head temperature {eng.head.t_choice:.6f} "
           f"(folded {eng.head.decision.get('folded_temperature')})")
     decide(eng, tok, render_state([(4, 2), (4, 1), (4, 0)], (1, 6)))  # warm-up
-    held = [json.loads(l) for l in open(HELDOUT)]
+    # Only the parity rows and --heldout read validation rows; --games / --state-json do not need the file to exist.
+    held = load_heldout(HELDOUT) if (a.parity or default_run or a.heldout) else []
     report = {}
     if a.parity or default_run:
         print("\n== 5 Colab parity rows (stock_snake_parity_rows.json) ==")

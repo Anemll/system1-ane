@@ -55,9 +55,24 @@ class ClefEngine:
         r["head_ms"] = 1e3 * (time.perf_counter() - t0)
         return logits.numpy(), r
 
-    def decide_row(self, state, question: dict) -> dict:
+    def encode_row(self, state, question: dict) -> dict:
+        """Tokenize one question for the Clef head. Raises ValueError (the server answers 422) for unsupported types.
+
+        The joint-schema head is trained on ``TYPE: choice`` fields (see ``clef_head.encode_record``) and scores each
+        option's description span. ``score`` and ``noul`` questions have no trained field type in it, so they are refused
+        instead of being scored by a head that never saw them.
+        """
+        kind = question.get("type")
+        if kind != "choice":
+            raise ValueError(f"This Unsloth Clef adapter answers choice questions only; got type {kind!r}. "
+                             "Send a choice question, or use the base build for score and noul.")
         options = {k: ("" if v is None else v) for k, v in question["criteria"].items()}
-        enc = self.tokenize(state, question.get("instructions") or "Choose the best matching option.", options)
+        return self.tokenize(state, question.get("instructions") or "Choose the best matching option.", options)
+
+    def decide_row(self, state, question: dict, enc: dict | None = None) -> dict:
+        """``enc`` is ``encode_row``'s result when the caller already tokenized (to check the token limit first)."""
+        if enc is None:
+            enc = self.encode_row(state, question)
         logits, r = self.logits_for(enc)
         probs = torch.softmax(torch.from_numpy(logits) / self.head.t_choice, -1).numpy()
         by_key = dict(zip(enc["option_keys"], probs.tolist()))

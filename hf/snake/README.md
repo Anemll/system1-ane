@@ -24,6 +24,8 @@ tags:
 
 **This is a demo, not a strong player**: about 0.25 food per game in the 8-game self-play check (base: 0.12).
 
+**Source / code:** [github.com/Anemll/system1-ane](https://github.com/Anemll/system1-ane) (MIT): runtime, demo, training and conversion code.
+
 ## What's here
 
 `config.json` (package descriptor, not a transformers config), `coreai/` (six chunk packages + `head_readout`, `manifest.json`), `model/` (tokenizer, `decision_config.json`, readout, FP16 embeddings, transformers `config.json`), `LICENSE`, `NOTICE`. About 1.5 GB, exported not compiled.
@@ -37,7 +39,7 @@ export COREAI_PYTHON=/path/to/coreai-sdk/bin/python
 python forge.py compile --build ~/Models/jeff-ane/base/coreai
 python forge.py compile --build ~/Models/jeff-ane/snake/coreai
 python forge.py system1-ane-serve --model ~/Models/jeff-ane/base/model --build ~/Models/jeff-ane/base/coreai \
-  --adapter snake=$HOME/Models/jeff-ane/snake/coreai --port 8787
+  --adapter snake=$HOME/Models/jeff-ane/snake/coreai --port 8796
 ```
 
 Serve it as an adapter next to [`anemll/jeff-ane-base-coreai`](https://huggingface.co/anemll/jeff-ane-base-coreai), which carries the full checkpoint `system1-ane-serve --model` needs.

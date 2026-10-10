@@ -139,11 +139,11 @@ python3 -m projects.tetris_training.play \
   --output "$HOME/Models/jeff-tetris-training/evals/teacher-dev"
 ```
 
-Merge/export/compile and load the candidate using the existing [Jeff serving workflow](../../docs/SYSTEM1_ANE_SERVE.md). Once its ANE build is served on port 8787:
+Merge/export/compile and load the candidate using the existing [Jeff serving workflow](../../docs/SYSTEM1_ANE_SERVE.md). Once its ANE build is served on port 8796:
 
 ```sh
 python3 -m projects.tetris_training.play \
-  --dataset "$DATA" --split dev --adapter tetris --url http://127.0.0.1:8787 \
+  --dataset "$DATA" --split dev --adapter tetris --url http://127.0.0.1:8796 \
   --output "$HOME/Models/jeff-tetris-training/evals/pilot-dev"
 ```
 

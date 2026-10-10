@@ -107,7 +107,7 @@ python forge.py system1-ane-serve \
   --model "$HOME/Models/jeff/jeff-base-v1.3" \
   --build "$HOME/Models/jeff-coreai/coreai" \
   --adapter snake="$HOME/Models/jeff-coreai/adapters/snake/coreai" \
-  --host 127.0.0.1 --port 8787
+  --host 127.0.0.1 --port 8796
 ```
 
 See [SYSTEM1_ANE_SERVE.md](SYSTEM1_ANE_SERVE.md) for the HTTP API and [ADAPTERS.md](ADAPTERS.md) for which builds to load.

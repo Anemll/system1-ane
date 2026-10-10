@@ -14,9 +14,9 @@ Code: `coreai/jeff_snake.py`, `coreai/jeff_tetris.py`, `coreai/jeff_lora.py`, `s
 Eval against a running server:
 
 ```sh
-python scripts/jeff_snake_eval.py --url http://127.0.0.1:8787 --games 8 \
+python scripts/jeff_snake_eval.py --url http://127.0.0.1:8796 --games 8 \
   --adapter base --adapter snake
-python scripts/jeff_tetris_eval.py --url http://127.0.0.1:8787
+python scripts/jeff_tetris_eval.py --url http://127.0.0.1:8796
 ```
 
 ## Published PEFT (mstrasser, v1.3, Apache-2.0)
@@ -57,7 +57,7 @@ python forge.py system1-ane-serve \
   --adapter tools="$HOME/Models/jeff-coreai/adapters/tools/coreai" \
   --adapter guard="$HOME/Models/jeff-coreai/adapters/guard/coreai" \
   --adapter spam="$HOME/Models/jeff-coreai/adapters/spam/coreai" \
-  --host 127.0.0.1 --port 8787
+  --host 127.0.0.1 --port 8796
 ```
 
 Request field `"adapter": "snake"` or `"model": "snake"` selects a loaded build. Omitting both stays on `base`. `GET /health` lists `adapters`. The demo dropdown is filled from that list.

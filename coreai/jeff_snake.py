@@ -300,11 +300,20 @@ def _far_food(snake, size: int):
     return place_food(random.Random(0), snake, size)
 
 
-def generate_snake_rows(n: int, seed: int, hint: bool = False, size: int = SIZE) -> list[dict]:
-    """``n`` distinct boards labeled by the oracle. Off-policy: the walk mixes oracle steps with random safe steps."""
+def row_key(row: dict) -> tuple:
+    """The board a row asks about (snake cells in order, food): what must not repeat between train and validation."""
+    return (tuple(tuple(cell) for cell in row["snake"]), tuple(row["food"]))
+
+
+def generate_snake_rows(n: int, seed: int, hint: bool = False, size: int = SIZE, exclude=None) -> list[dict]:
+    """``n`` distinct boards labeled by the oracle. Off-policy: the walk mixes oracle steps with random safe steps.
+
+    ``exclude`` is an optional set of ``row_key`` values; boards in it are skipped (the random stream still advances, so
+    without ``exclude`` the output is unchanged).
+    """
     rng = random.Random(seed)
     rows = []
-    seen = set()
+    seen = set(exclude or ())
     guard = 0
     while len(rows) < n:
         guard += 1

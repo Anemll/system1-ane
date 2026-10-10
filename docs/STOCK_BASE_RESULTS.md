@@ -4,6 +4,8 @@ The resulting build is available as an optional extra adapter on Hugging Face: [
 
 Jeff v1.3 (a Qwen3.5-0.8B fine-tune) is the primary model of this repository. This page records what has been checked on the **stock** `Qwen/Qwen3.5-0.8B` base (`unsloth/Qwen3.5-0.8B` carries the same weights). The evidence lives outside Git (run notes on the M5 Max and an external drive); nothing here was re-run for this release.
 
+> **Validation split.** Every accuracy on this page (87.1% / 28.1-28.5% in Colab, 93.4% / 32.8% on the Jeff base, 85.2% on the ANE, ECE and calibration) was measured on the earlier split (5 of 256 validation states also appeared in training); remeasurement on the deduplicated split pending. Latency, placement and the 5-row parity result are not affected. `scripts/unsloth/make_snake_data.py` now regenerates a deduplicated validation set (the 5 overlapping rows, indexes 12, 48, 118, 150 and 218, are replaced; the other 251 rows and rows 0-4 used for parity are unchanged).
+
 ## Summary
 
 | Question | Status |

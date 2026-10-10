@@ -95,5 +95,35 @@ class ClefHeadTests(unittest.TestCase):
         self.assertLess(float(np.abs(self.ane_port(T) - self.ane_port(T + 8)).max()), 1e-4)
 
 
+@unittest.skipIf(torch is None, "torch / safetensors not installed")
+class ClefEngineQuestionTypes(unittest.TestCase):
+    """ClefEngine answers choice questions; score and noul get a ValueError (HTTP 422), not a crash (HTTP 500)."""
+
+    def engine(self):
+        import clef_engine
+        eng = object.__new__(clef_engine.ClefEngine)
+        eng.tokenize = lambda state, instructions, options: {
+            "input_ids": [1, 2, 3], "option_keys": sorted(options), "question_span": [0, 1], "option_spans": []}
+        eng.head = mock.Mock(t_choice=1.0)
+        eng.logits_for = lambda enc: (np.zeros(len(enc["option_keys"]), np.float32),
+                                      {"calls_ms": [1.0], "head_ms": 0.5, "call_widths": [256]})
+        return eng
+
+    def test_choice_still_works_and_keeps_option_order(self):
+        eng = self.engine()
+        out = eng.decide_row("s", {"type": "choice", "criteria": {"up": "a", "down": None}})
+        self.assertEqual(len(out["option_probabilities"]), 2)
+        self.assertAlmostEqual(sum(out["option_probabilities"]), 1.0, places=5)
+        self.assertEqual(out["tokens"], 3)
+
+    def test_score_and_noul_are_rejected_with_value_error(self):
+        eng = self.engine()
+        for question in ({"type": "score", "criteria": ["bad", "ok", "good"]},
+                         {"type": "noul", "criteria": {"true": "yes"}}, {"type": "noul"}):
+            for call in (eng.encode_row, eng.decide_row):
+                with self.assertRaisesRegex(ValueError, "choice questions only"):
+                    call("s", question)
+
+
 if __name__ == "__main__":
     unittest.main()

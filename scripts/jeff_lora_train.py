@@ -177,6 +177,24 @@ def masked_logits(logits: torch.Tensor, batch: list[dict]) -> torch.Tensor:
     return out
 
 
+def timed_warmup(backbone, readout, layers, train_enc, batch, pad_id, device, make_optimizer, stop_at=None) -> dict:
+    """Two timed optimizer steps (step 1 includes the MPS graph warmup), then put the weights back.
+
+    ``stop_at`` is the ``--train-until`` deadline: past it no optimizer step runs (``run_epoch`` checks it before each step).
+    """
+    snapshot = ([layer.A.detach().clone() for layer in layers],
+                [layer.B.detach().clone() for layer in layers],
+                readout.weight.detach().clone())
+    timed = run_epoch(backbone, readout, train_enc[:max(batch * 2, batch)], batch, pad_id, device, make_optimizer(),
+                      stop_at=stop_at)
+    with torch.no_grad():
+        for layer, saved_a, saved_b in zip(layers, snapshot[0], snapshot[1]):
+            layer.A.copy_(saved_a)
+            layer.B.copy_(saved_b)
+        readout.weight.copy_(snapshot[2])
+    return timed
+
+
 def run_epoch(model, readout, rows, batch_size, pad_id, device, optimizer=None,
               *, stop_at=None, step_callback=None) -> dict:
     train = optimizer is not None
@@ -391,18 +409,9 @@ def main(argv: list[str] | None = None) -> int:
     print(f"LoRA layers {len(layers)}  trainable {n_train}  rank {a.rank}  "
           f"lora lr {a.lr:g}  readout lr {a.readout_lr:g}  temperature {temperature:.4f} (inference only)",
           flush=True)
-    # Two timed steps, then put the weights back. Step 1 includes the MPS graph warmup.
-    snapshot = ([layer.A.detach().clone() for layer in layers],
-                [layer.B.detach().clone() for layer in layers],
-                readout.weight.detach().clone())
-    timed = run_epoch(backbone, readout, train_enc[:max(a.batch * 2, a.batch)], a.batch, pad_id, device, make_optimizer())
+    timed = timed_warmup(backbone, readout, layers, train_enc, a.batch, pad_id, device, make_optimizer, stop_at)
     print(f"timed {device} steps: {timed['seconds_per_step']:.3f} s/step "
           f"(steady, batch {a.batch}; first step is the warmup)", flush=True)
-    with torch.no_grad():
-        for layer, saved_a, saved_b in zip(layers, snapshot[0], snapshot[1]):
-            layer.A.copy_(saved_a)
-            layer.B.copy_(saved_b)
-        readout.weight.copy_(snapshot[2])
     optimizer = make_optimizer()
 
     started = time.perf_counter()

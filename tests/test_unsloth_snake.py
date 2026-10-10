@@ -3,6 +3,7 @@ import importlib.util
 import json
 import py_compile
 import re
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -86,6 +87,64 @@ class MergeLora(unittest.TestCase):
             scale, layers = mod.load_adapter(d)
         self.assertEqual(scale, 2.0)
         self.assertEqual(list(layers), ["x.y"])
+
+
+class SnakeDataSplit(unittest.TestCase):
+    def test_validation_boards_are_not_in_training(self):
+        sys.path.insert(0, str(ROOT))
+        from coreai.jeff_snake import generate_snake_rows, row_key
+        train, held = load("make_snake_data").build_splits()
+        self.assertEqual((len(train), len(held)), (2048, 256))
+        self.assertEqual({row_key(r) for r in train} & {row_key(r) for r in held}, set())
+        self.assertEqual(len({row_key(r) for r in held}), 256)
+        # deterministic; train is the original seed-0 set; only the 5 boards that overlapped training were replaced
+        self.assertEqual(train, generate_snake_rows(2048, 0))
+        self.assertEqual(held, load("make_snake_data").build_splits()[1])
+        old = generate_snake_rows(256, 1)
+        self.assertEqual([i for i, (a, b) in enumerate(zip(old, held)) if a != b], [12, 48, 118, 150, 218])
+
+    def test_exclude_skips_boards_without_changing_the_default(self):
+        sys.path.insert(0, str(ROOT))
+        from coreai.jeff_snake import generate_snake_rows, row_key
+        base = generate_snake_rows(20, 3)
+        self.assertEqual(base, generate_snake_rows(20, 3, exclude=None))
+        skipped = generate_snake_rows(20, 3, exclude={row_key(base[0])})
+        self.assertNotIn(row_key(base[0]), {row_key(r) for r in skipped})
+
+
+class RunStockSnakeHeldout(unittest.TestCase):
+    """--games / --state-json must not open heldout.jsonl; --parity / --heldout / the default run must."""
+
+    def run_main(self, argv):
+        import os
+        from types import SimpleNamespace
+        from unittest import mock
+        tmp = Path(tempfile.mkdtemp())
+        (tmp / "coreai").mkdir()
+        sys.path.insert(0, str(ROOT))
+        env = {"STOCK_BUILD": str(tmp), "STOCK_HELDOUT": str(tmp / "missing" / "heldout.jsonl"),
+               "STOCK_REPORT": str(tmp / "report.json"), "COREAI_PYTHON": sys.executable}
+        with mock.patch.dict(os.environ, env), mock.patch.object(sys, "argv", ["run_stock_snake.py", *argv]):
+            mod = load("run_stock_snake")
+        move = {"move": "up", "total_ms": 1.0, "prefill_ms": 1.0, "head_ms": 0.0, "confidence": 1.0, "tokens": 1,
+                "tokenize_ms": 0.0, "probabilities": {"up": 1.0}, "logits": [0.0], "enc": {"input_ids": []}}
+        eng = mock.Mock(head=SimpleNamespace(t_choice=1.0, decision={}), head_desc="x")
+        with mock.patch.object(mod, "JeffCoreAI", return_value=mock.Mock(entry="e")), \
+                mock.patch.object(mod, "Tokenizer"), mock.patch.object(mod, "ClefEngine", return_value=eng), \
+                mock.patch.object(mod, "decide", return_value=move), mock.patch.object(sys, "argv", ["run_stock_snake.py", *argv]), \
+                mock.patch("builtins.print"):
+            mod.main()
+
+    def test_games_and_state_json_do_not_need_heldout(self):
+        self.run_main(["--games", "1", "--max-steps", "2"])
+        state = Path(tempfile.mkdtemp()) / "s.json"
+        state.write_text(json.dumps({"snake": [[4, 2], [4, 1], [4, 0]], "food": [1, 6]}))
+        self.run_main(["--state-json", str(state)])
+
+    def test_heldout_modes_still_read_the_file(self):
+        for argv in (["--heldout", "4"], ["--parity"]):
+            with self.assertRaises(FileNotFoundError):
+                self.run_main(argv)
 
 
 if __name__ == "__main__":

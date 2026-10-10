@@ -296,12 +296,19 @@ class App:
         if hasattr(engine, "decide_row"):  # Clef-head build: the engine builds its own prompt
             t0 = time.perf_counter()
             try:
-                raw = engine.decide_row(state, question)
+                enc = engine.encode_row(state, question) if hasattr(engine, "encode_row") else None
+            except ValueError as error:
+                raise DecisionError(422, str(error)) from error
+            tokenize_ms = 1e3 * (time.perf_counter() - t0)
+            if enc is not None and len(enc["input_ids"]) > self.max_tokens:  # same limit and message as the path below
+                raise DecisionError(422, f"This question is {len(enc['input_ids'])} tokens; this build accepts at most {self.max_tokens}.")
+            try:
+                raw = engine.decide_row(state, question) if enc is None else engine.decide_row(state, question, enc)
             except ValueError as error:
                 raise DecisionError(422, str(error)) from error
             calls = [float(value) for value in raw["calls_ms"]]
             return [float(v) for v in raw["option_probabilities"]], {
-                "tokenize_ms": 0.0, "calls_ms": [round(v, 2) for v in calls],
+                "tokenize_ms": round(tokenize_ms, 2), "calls_ms": [round(v, 2) for v in calls],
                 "call_widths": [int(v) for v in raw.get("call_widths", [])], "prefill_ms": round(sum(calls), 2),
                 "head_ms": round(float(raw["head_ms"]), 2), "tokens": int(raw["tokens"]), "prefix_tokens": 0}
         t0 = time.perf_counter()

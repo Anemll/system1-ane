@@ -282,6 +282,47 @@ class ServerTests(unittest.TestCase):
             app.evaluate({"model": "snake", "adapter": "base", "state": "board", "options": ["up"]})
         self.assertEqual(raised.exception.status, 422)
 
+    def test_clef_adapter_enforces_max_tokens_before_the_backbone(self):
+        class ClefFake:
+            def __init__(self, n_tokens):
+                self.n, self.encoded, self.ran = n_tokens, 0, 0
+
+            def encode_row(self, state, question):
+                self.encoded += 1
+                return {"input_ids": list(range(self.n)), "option_keys": sorted(question["criteria"])}
+
+            def decide_row(self, state, question, enc=None):
+                self.ran += 1
+                return {"option_probabilities": [0.5, 0.5], "calls_ms": [1.0], "head_ms": 0.1, "call_widths": [256],
+                        "tokens": len(enc["input_ids"])}
+
+        body = {"state": "board", "options": ["up", "down"], "adapter": "clef"}
+        too_long = ClefFake(11)
+        app = make_app(adapters={"clef": too_long}, max_tokens=10)
+        with self.assertRaises(system1_ane_serve.DecisionError) as raised:
+            app.evaluate(body)
+        self.assertEqual(raised.exception.status, 422)
+        self.assertEqual(str(raised.exception.detail), "This question is 11 tokens; this build accepts at most 10.")
+        self.assertEqual((too_long.encoded, too_long.ran), (1, 0))  # the backbone never ran
+        exact = ClefFake(10)
+        answer = make_app(adapters={"clef": exact}, max_tokens=10).evaluate(body)
+        self.assertEqual(exact.ran, 1)
+        self.assertEqual(answer["timings"]["questions"][0]["tokens"], 10)
+
+    def test_clef_adapter_unsupported_question_type_is_422(self):
+        class ClefFake:
+            def encode_row(self, state, question):
+                raise ValueError("This Unsloth Clef adapter answers choice questions only; got type 'noul'.")
+
+            def decide_row(self, *args):
+                raise AssertionError("must not run")
+
+        app = make_app(adapters={"clef": ClefFake()})
+        with self.assertRaises(system1_ane_serve.DecisionError) as raised:
+            app.evaluate({"state": "board", "adapter": "clef", "questions": {"q": {"type": "noul"}}})
+        self.assertEqual(raised.exception.status, 422)
+        self.assertIn("choice questions only", str(raised.exception.detail))
+
     def test_prefix_cache_is_forwarded(self):
         hit = {"pos": 2, "token_ids": [11, 22], "hidden": [1.0], "chunks": []}
         cache = RecordingCache(hit)

@@ -14,10 +14,10 @@ export COREAI_PYTHON=/path/to/coreai-sdk/bin/python   # your Core AI SDK venv
 python forge.py system1-ane-serve \
   --model "$HOME"/Models/jeff/jeff-base-v1.3 \
   --build "$HOME"/Models/jeff-coreai/coreai \
-  --host 127.0.0.1 --port 8787
+  --host 127.0.0.1 --port 8796
 ```
 
-Then open http://127.0.0.1:8787/. Adding `?sample=1` also classifies the sample refund message on load.
+Then open http://127.0.0.1:8796/. Adding `?sample=1` also classifies the sample refund message on load.
 
 | Page | What it does |
 | --- | --- |
@@ -90,7 +90,7 @@ An existing Jeff client points at this server with no other change, for text req
 
 ```python
 from jeff import Client
-jeff = Client("http://127.0.0.1:8787", model="jeff-latest")
+jeff = Client("http://127.0.0.1:8796", model="jeff-latest")
 jeff.choose("The disk is full.", {"page": "Page someone.", "wait": "Wait."})
 ```
 
@@ -159,13 +159,13 @@ python forge.py system1-ane-serve \
   --adapter tools="$HOME/Models/jeff-coreai/adapters/tools/coreai" \
   --adapter guard="$HOME/Models/jeff-coreai/adapters/guard/coreai" \
   --adapter spam="$HOME/Models/jeff-coreai/adapters/spam/coreai" \
-  --host 127.0.0.1 --port 8787
+  --host 127.0.0.1 --port 8796
 ```
 
 Food eaten, survival steps, and per-decision latency, same opening boards for each name:
 
 ```sh
-python scripts/jeff_snake_eval.py --url http://127.0.0.1:8787 --games 8 \
+python scripts/jeff_snake_eval.py --url http://127.0.0.1:8796 --games 8 \
   --adapter base --adapter snake
 ```
 
@@ -211,7 +211,7 @@ The adapter is a stock `unsloth/Qwen3.5-0.8B` backbone with a LoRA and an Unslot
   model/                       # fp16 backbone weights + tokenizer/config of the merged checkpoint
 ```
 
-Prebuilt: the build is on Hugging Face as [`anemll/system1-base-unsloth`](https://huggingface.co/anemll/system1-base-unsloth) (folder [`snake-stock-qwen3.5-unsloth/`](https://huggingface.co/anemll/system1-base-unsloth/tree/main/snake-stock-qwen3.5-unsloth)); `python scripts/download_model.py snake-stock-qwen3.5-unsloth` downloads it (root `config.json` plus that folder), then run `forge.py compile --build <folder>/coreai` once per Mac. Or build it yourself:
+Prebuilt: the build is on Hugging Face as [`anemll/system1-base-unsloth`](https://huggingface.co/anemll/system1-base-unsloth) (folder [`snake-stock-qwen3.5-unsloth/`](https://huggingface.co/anemll/system1-base-unsloth/tree/main/snake-stock-qwen3.5-unsloth)); `python scripts/download_model.py snake-stock-qwen3.5-unsloth` downloads it (root `config.json` plus that folder), then run `forge.py compile --build "$JEFF_MODELS_DIR/snake-stock-qwen3.5-unsloth/coreai"` once per Mac (the build lands flat as `$JEFF_MODELS_DIR/snake-stock-qwen3.5-unsloth/{coreai,model}`, like the other builds; an older nested copy is flattened by the next download). Serving it needs `torch` in `COREAI_PYTHON` because the Clef head runs in PyTorch, and a Clef adapter answers `choice` questions only (a `score` or `noul` question gets HTTP 422); the same `max_tokens` limit as the other builds applies. Or build it yourself:
 
 Flow (details and a run order in [`scripts/unsloth/README.md`](../scripts/unsloth/README.md)):
 
@@ -219,7 +219,7 @@ Flow (details and a run order in [`scripts/unsloth/README.md`](../scripts/unslot
 2. **Merge** the LoRA into the stock weights in fp32: `scripts/unsloth/prep_ckpt.py`.
 3. **Convert**: `python forge.py jeff-convert --model <merged ckpt> --output <build> --ctx 2048 --prefill 304 --quant fp16`. The stock prompt is 261-264 tokens (258-273 seen), so a 256-row window needs two ANE calls and 304 needs one (`--prefill` is a multiple of 8).
 4. **Compile**: `python forge.py compile --build <build>/coreai`, then `scripts/unsloth/assemble_stock_build.py` to add `model/` and `clef_head/`.
-5. **Serve**: `python forge.py system1-ane-serve --model <base>/model --build <base>/coreai --adapter snake-stock=<build>/coreai --port <port>`. Add `--adapter snake=<snake build>/coreai` as usual; request it with `"adapter": "snake-stock"` (the Snake demo page lists it in the adapter dropdown only when it is loaded). Startup prints `adapter snake-stock: Unsloth Clef head (...)`.
+5. **Serve**: `python forge.py system1-ane-serve --model <base>/model --build <base>/coreai --adapter snake-stock=<build>/coreai --port 8796`. Add `--adapter snake=<snake build>/coreai` as usual; request it with `"adapter": "snake-stock"` (the Snake demo page lists it in the adapter dropdown only when it is loaded). Startup prints `adapter snake-stock: Unsloth Clef head (...)`.
 6. **Verify**: `scripts/unsloth/run_stock_snake.py` (parity vs the 5 Colab rows, held-out accuracy, games, latency), `scripts/unsloth/torch_reference.py` (fp32 PyTorch reference), `scripts/unsloth/serve_games.py` (games through the running server).
 
 Head backend: `CLEF_HEAD_BACKEND=host` (default) runs the head in PyTorch fp32 on the host CPU, about 8 ms per decision. `CLEF_HEAD_BACKEND=ane` runs it as a fixed-shape fp16 Core AI package (304 prompt rows x 8 options), about 3 ms (the ANE call itself about 2.2 ms); prompts over 304 rows or 8 options fall back to the host head, and builds without the package use the host head. Measured locally on an M5 Max: about 90.9 ms per decision with the host head, about 85 ms with the ANE head, 85.2% held-out accuracy (Colab fp32 87.1%); see [RESULTS.md](RESULTS.md) and [FP16_HEAD_WRAPUP.md](FP16_HEAD_WRAPUP.md). These are local measurements, not controlled benchmarks.
@@ -307,7 +307,7 @@ uv run jeff-train --lora-rank 16 --lr 2e-4 --readout-lr 5e-6 \
 
 `inspect_coreai_cache.py --executable python --strict` reports every chunk and `head_readout` as `fully_ane` for each of the four builds (bonded mode 1, one ANE region, no GPU region). The eight labeled rows all matched their gold choice on the merged PyTorch checkpoint.
 
-The same four official examples on base Jeff, at the base temperature, pick a different top option or a much lower confidence: triage `other` 0.60 versus adapter `k1` 1.00; tools `t3` 0.53 versus adapter `answer_directly` 0.68; guard `indirect_injection` 0.53 versus adapter 1.00; spam `spam` 0.49 versus adapter `phishing` 0.97. The demo dropdown loads a sample for the selected adapter and scores that question on base as well. On `127.0.0.1:8787` those page requests were triage `k1` 0.998 versus base `other` 0.392, tools `answer_directly` 0.650 versus base `t3` 0.453, guard `indirect_injection` 0.995 versus base `benign` 0.309, and spam `phishing` 0.939 versus base `spam` 0.242. The Snake opening on that server was base `up` at 0.117 and the snake adapter `left` at 0.222. `/health` lists `base`, `snake`, `triage`, `tools`, `guard`, and `spam`. The page starts Snake in Play. With all six builds loaded, a few hundred of those moves can exhaust IOSurface and kill the process (`NDArray` allocation failure). A single decision on each adapter succeeds, and the 27B server on port 8766 was left running.
+The same four official examples on base Jeff, at the base temperature, pick a different top option or a much lower confidence: triage `other` 0.60 versus adapter `k1` 1.00; tools `t3` 0.53 versus adapter `answer_directly` 0.68; guard `indirect_injection` 0.53 versus adapter 1.00; spam `spam` 0.49 versus adapter `phishing` 0.97. The demo dropdown loads a sample for the selected adapter and scores that question on base as well. On `127.0.0.1:8796` those page requests were triage `k1` 0.998 versus base `other` 0.392, tools `answer_directly` 0.650 versus base `t3` 0.453, guard `indirect_injection` 0.995 versus base `benign` 0.309, and spam `phishing` 0.939 versus base `spam` 0.242. The Snake opening on that server was base `up` at 0.117 and the snake adapter `left` at 0.222. `/health` lists `base`, `snake`, `triage`, `tools`, `guard`, and `spam`. The page starts Snake in Play. With all six builds loaded, a few hundred of those moves can exhaust IOSurface and kill the process (`NDArray` allocation failure). A single decision on each adapter succeeds, and the 27B server on port 8766 was left running.
 
 ```sh
 python scripts/jeff_peft_torch.py \

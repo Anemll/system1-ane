@@ -46,14 +46,16 @@ Steps 1-2 run on a Colab GPU VM; steps 3-8 run on an Apple-silicon Mac with the 
 6. **Assemble the build**: `python scripts/unsloth/assemble_stock_build.py <ckpt dir> <build> <adapter_head>`
 7. **(Optional) fp16 ANE Clef head**: `python scripts/convert_clef_head_fp16.py <build>/coreai/clef_head`, then `python coreai/clef_ane_head.py <build>/coreai/clef_head` (Core AI SDK Python; writes `clef_head_ane.aimodel` + `ane_head_config.json`, about 48 MB, generated, not stored in Git).
 8. **Serve** (default host fp32 head; `CLEF_HEAD_BACKEND=ane` uses the compiled head; prompts over 304 rows or 8 options fall back to the host head):
-   `[CLEF_HEAD_BACKEND=ane] python forge.py system1-ane-serve --model <base build>/model --build <base build>/coreai --adapter snake-stock=<build>/coreai --port <spare port>`
+   `[CLEF_HEAD_BACKEND=ane] python forge.py system1-ane-serve --model <base build>/model --build <base build>/coreai --adapter snake-stock=<build>/coreai --port 8796`
    (`--model`/`--build` are the base build the server starts from, e.g. the downloaded `base`; the stock build is an additional `--adapter`, selected per request with `"adapter": "snake-stock"`.)
 9. **Verify**:
    - `STOCK_BUILD=<build> STOCK_HELDOUT=<dir>/heldout.jsonl python scripts/unsloth/run_stock_snake.py` (add `--heldout 256` for accuracy, `--parity` for the Colab rows only);
    - `python scripts/unsloth/torch_reference.py <ckpt dir> <adapter_head>` for the fp32 PyTorch reference;
-   - `python scripts/unsloth/serve_games.py http://127.0.0.1:<port> snake-stock 8` for latency through the server.
+   - `python scripts/unsloth/serve_games.py http://127.0.0.1:8796 snake-stock 8` for latency through the server.
 
 ## Measured results (local, 9 Oct 2026, Apple M5 Max, machine not otherwise idle; not controlled benchmarks)
+
+The accuracy rows were measured on the earlier split (5 of 256 validation states also appeared in training); remeasurement on the deduplicated split pending; `make_snake_data.py` now writes a validation set that shares no state with training.
 
 | | value |
 |---|---|

@@ -24,6 +24,8 @@ tags:
 pass: Jeff scores every legal placement and the demo plays the most probable one. The packages run fully on the
 **Apple Neural Engine** (FP16, Core AI).
 
+**Source / code:** [github.com/Anemll/system1-ane](https://github.com/Anemll/system1-ane) (MIT): runtime, demo, training and conversion code.
+
 ## What's here
 
 | Path | What |
@@ -44,8 +46,8 @@ export COREAI_PYTHON=/path/to/coreai-sdk/bin/python
 python forge.py compile --build ~/Models/jeff-ane/base/coreai
 python forge.py compile --build ~/Models/jeff-ane/tetris/coreai
 python forge.py system1-ane-serve --model ~/Models/jeff-ane/base/model --build ~/Models/jeff-ane/base/coreai \
-  --adapter tetris=$HOME/Models/jeff-ane/tetris/coreai --port 8787
-# open http://127.0.0.1:8787/ and pick the Tetris tab
+  --adapter tetris=$HOME/Models/jeff-ane/tetris/coreai --port 8796
+# open http://127.0.0.1:8796/ and pick the Tetris tab
 ```
 
 Requires Apple Silicon and macOS with Core AI. Measured on an Apple M5 Max, macOS 27.2 (bonded ANE compile mode 1).
