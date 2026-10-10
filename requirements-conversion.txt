@@ -1,0 +1,10 @@
+# Core AI conversion SDK (macOS). Install into COREAI_PYTHON, not the host .venv.
+# Pins match the M5 Max Jeff convert (macOS 27, 7 October 2026).
+coreai-core==1.0.0b2
+coreai-opt==0.2.1
+coreai-torch==0.4.2
+torch==2.11.0
+coremltools==9.0
+numpy==2.3.5
+safetensors==0.7.0
+scipy==1.18.1

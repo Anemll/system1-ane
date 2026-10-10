@@ -1,0 +1,12 @@
+# Host venv (Python 3.11+): train, tokenize, forge.py, unit tests.
+# Convert / compile / system1-ane-serve need a separate Core AI SDK interpreter (COREAI_PYTHON).
+numpy>=2.0
+torch>=2.6
+safetensors>=0.5
+transformers>=4.51
+tokenizers>=0.21
+scipy>=1.13
+ml_dtypes>=0.4
+huggingface_hub>=0.30   # scripts/download_model.py
+# coremltools is optional on Linux (lazy). Needed on the Mac convert path if not using the SDK venv.
+# coremltools>=8.0

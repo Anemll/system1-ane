@@ -1,0 +1,20 @@
+Jeff on the Apple Neural Engine — Core AI builds
+Copyright 2026 ANEMLL contributors
+
+These weights are derived works, distributed under the Apache License 2.0 (see LICENSE):
+
+- Qwen3.5-0.8B, Copyright Qwen Team, Alibaba Cloud. Apache-2.0.
+  https://huggingface.co/Qwen/Qwen3.5-0.8B
+- Jeff v1.3 (jeff-base) by mstrasser, a fine-tune of Qwen3.5-0.8B. Apache-2.0.
+  https://huggingface.co/mstrasser/jeff-base
+
+Modifications by ANEMLL (the snake and tetris builds only): LoRA + readout-head fine-tuning with this
+project's own training code on Apple M5 Max (PyTorch MPS), merge, and conversion of all three builds to
+Core AI (.aimodel) FP16 packages for the Apple Neural Engine. The base build is jeff-base v1.3 converted
+without fine-tuning. The snake and tetris adapters were trained by ANEMLL locally (no Unsloth, no Colab).
+
+Tetris training labels come from the El-Tetris heuristic by Islam El-Ashi (2011), an improvement on
+Pierre Dellacherie's algorithm: https://imake.ninja/el-tetris-an-improvement-on-pierre-dellacheries-algorithm/
+No third-party dataset is used.
+
+Source code (MIT): https://github.com/Anemll/system1-ane
