@@ -1,5 +1,7 @@
 # Jeff Tetris training
 
+Read [How the shipped Tetris adapter was trained](../../docs/TETRIS_TRAINING.md) for the historical round-02 recipe and results. The [experimental Colab notebook](../../notebooks/03_tetris_training_colab.ipynb) trains a smaller new adapter; it has not yet been validated on a Colab GPU.
+
 Build a reproducible supervised dataset for the existing **LoRA plus readout head** trainer. No RL framework, laya model, GPU or model inference is needed to build the initial data. Generation uses Python's standard library and the repository's El-Tetris oracle.
 
 This is a starting dataset with broader board coverage; stronger gameplay must be established by training and ANE evaluation. No survival improvement is implied by passing the dataset audit.

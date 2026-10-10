@@ -128,7 +128,7 @@ JEFF_TETRIS_BUILD="${JEFF_TETRIS_BUILD:-$HOME/Models/jeff-tetris-training/overni
 # then use --adapter tetris="$JEFF_TETRIS_BUILD/coreai"
 ```
 
-Notebooks in [`notebooks/`](notebooks/) walk through the same steps: download + ANE inference, the Tetris model, and Snake.
+Notebooks in [`notebooks/`](notebooks/) cover download + ANE inference, the Tetris model, and Snake. For training, see [how the shipped Tetris adapter was trained](docs/TETRIS_TRAINING.md) and the [experimental Colab tutorial](notebooks/03_tetris_training_colab.ipynb) ([open in Colab](https://colab.research.google.com/github/Anemll/system1-ane/blob/main/notebooks/03_tetris_training_colab.ipynb)). The Colab tutorial has not yet been validated on a GPU; its runtime estimate is unmeasured.
 
 ## Build your own
 
@@ -198,6 +198,7 @@ Convert, compile, and serve must use the same `COREAI_PYTHON`.
 ## Documentation
 
 - [Tetris training](projects/tetris_training/README.md) — teacher/recovery data, LoRA plus readout, gameplay evaluation and bounded continuation
+- [How the shipped Tetris adapter was trained](docs/TETRIS_TRAINING.md) — round-02 recipe, provenance, results and differences from the experimental Colab notebook
 - [Workspace handoff](docs/WORKSPACE.md) — primary checkout, imported work and external dependencies
 - [Architecture](docs/ARCHITECTURE.md) — checkpoint, readout, prefill-only packages, prefix hook
 - [Build / export pipeline](docs/PIPELINE.md) — train → merge → convert → compile → serve
