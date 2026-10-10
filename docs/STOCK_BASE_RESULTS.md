@@ -52,6 +52,15 @@ The stock Snake prompt is 261-264 tokens, so a 304-token prefill window covers i
 
 Serving: the decision head for this adapter is the Unsloth head, which runs on the host through the Clef head engine; the backbone runs on the ANE. The Jeff comparison above (93.4% vs 87.1% on the same recipe) is unchanged.
 
+### Serving details and the fp16 ANE head
+
+- **Optional, not the default.** Jeff stays the default model and adapter of the server and the demo. The `snake-stock` option appears (as `snake-stock` in the demo's Snake dropdown) only when its build is passed with `--adapter snake-stock=<build>/coreai`; without that flag nothing changes.
+- **Recipe.** Merge the fp32 LoRA into the stock weights, convert with `python forge.py jeff-convert ... --prefill 304 --quant fp16`, compile, then serve as an extra adapter. Steps and run order: `scripts/unsloth/README.md`; serving how-to: `docs/SYSTEM1_ANE_SERVE.md` ("Serving the Unsloth-trained stock Snake adapter (optional)").
+- **Head on the host (default).** The Unsloth head runs in fp32 on the host CPU, about 8 ms per decision, for about 90.9 ms end to end.
+- **Head compiled to the ANE in fp16.** With `CLEF_HEAD_BACKEND=ane` the head runs as a fixed-shape fp16 Core AI package (about 3 ms; ANE call about 2.2 ms), for about 85 ms end to end (84.8 ms). Maximum |dlogit| against the host fp32 head is 0.005 on 261 rows, with no answer flips. Details: `docs/FP16_HEAD_WRAPUP.md`.
+- **Comparison.** The Jeff Snake adapter shipped here takes 63.7 ms per decision at the 256-token window in the same runs. All ANE numbers are from local runs on an Apple M5 Max on 9 October 2026, on a machine that was not otherwise idle. They are not controlled benchmarks.
+- **Where things are.** The weights are on Hugging Face as [`anemll/system1-base-unsloth`](https://huggingface.co/anemll/system1-base-unsloth), folder `snake-stock-qwen3.5-unsloth/` (`python scripts/download_model.py snake-stock-qwen3.5-unsloth`). Training logs and weights are not in this repository.
+
 ### Earlier partial check
 
 Before the decision-model run (7 Oct 2026, local), the stock Qwen3.5-0.8B language-model weights were converted with this repository's converter (FP16, `p256_2k`, stock language-model head) and loaded on an M5 Max.

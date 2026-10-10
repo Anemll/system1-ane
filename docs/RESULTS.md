@@ -111,7 +111,7 @@ Steps: `scripts/unsloth/prep_ckpt.py` (fp32 LoRA merge into the stock weights, z
 
 **Latency note.** The stock build is about 27 ms slower per decision than the one-call 256-row Snake adapter (90.9 vs 63.7 ms) because each call processes 304 rows for a longer prompt (about 262 tokens vs 214); the 304-row window removes the second call the stock prompt needed at 256 rows (135.5 → 90.9 ms). Compiling the 304-row build took about 108 s (1m47s in the compile log) vs about 83 s (1m23s) for the 256-row build. A figure of about 215 ms seen once under heavy machine load is excluded. With the head compiled to the ANE in fp16 (`CLEF_HEAD_BACKEND=ane`), the head takes 3.0 ms instead of 8.0 ms and `run_stock_snake.py` reports about 84.8 ms per decision (90.1 ms with the host head in the same runs); those runs were on a machine that was not idle, not a controlled benchmark. The server-path rows above were taken on a quiet machine; the two sets of runs differ by about 1 ms for the host-head build.
 
-**Not run:** a Qwen3 0.8B-class (non-3.5) base; a controlled latency benchmark of the stock build; the Colab training itself from this repository (it needs a GPU Colab VM; the notebook and scripts are included).
+**Not run:** a controlled latency benchmark of the stock build; the Colab training itself from this repository (it needs a GPU Colab VM; the notebook and scripts are included).
 
 ## Prefix cache (other branch)
 
