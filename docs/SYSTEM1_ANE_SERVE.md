@@ -294,6 +294,8 @@ uv run jeff-train --lora-rank 16 --lr 2e-4 --readout-lr 5e-6 \
 
 ## Published adapters
 
+The same path imports any of the 13 official jeffhub adapters, not only the four below. See [Import any jeffhub adapter](ADAPTERS.md#import-any-jeffhub-adapter) for the list with licences, steps, limits and the missing-bridge-dylib fix. `sanctions` and `soc` are CC BY-NC 4.0 on Hugging Face.
+
 `triage`, `tools`, `guard`, and `spam` are the Apache-2.0 PEFT adapters on `mstrasser/jeff-adapter-*` (revision `v1.3`). Each is a LoRA plus its own readout and fitted temperature. `scripts/jeff_peft_merge.py` folds one into a copy of jeff-base the same way `jeff.lora.merge_adapter` does (`W += (alpha / rank) B A`), then `jeff-convert` / `compile` write `$HOME/Models/jeff-coreai/adapters/<name>/`. `jeff-convert` stores that temperature under `manifest["convert"]["temperature"]`. `JeffCoreAI` reads it from there, so a served adapter uses its own temperature while embeddings still come from `--model`.
 
 `scripts/jeff_peft_torch.py` scores the merged checkpoint (the weights the converter saw) on the published example plus two choice rows from `test.jsonl`. `scripts/jeff_lora_parity.py` compares those probabilities to the compiled head. On this Mac, 7 October 2026, every row that fits the 2048-token context matched argmax. One tools row was 3513 tokens, so it was scored in PyTorch only (it also matched its label).

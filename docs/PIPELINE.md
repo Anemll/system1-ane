@@ -51,7 +51,7 @@ For full-game teacher/recovery datasets, teacher corrections from Jeff's own gam
 
 ```sh
 python scripts/jeff_peft_merge.py \
-  --model "$HOME/Models/jeff/jeff-base-v1.3" \
+  --base "$HOME/Models/jeff/jeff-base-v1.3" \
   --adapter "$HOME/Models/jeff/adapters/jeff-adapter-triage" \
   --output "$HOME/Models/jeff-published/triage"
 ```

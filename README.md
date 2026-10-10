@@ -154,10 +154,12 @@ Writes `adapter/`, `merged/` (full checkpoint), and `report.json`. Training is P
 
 ```sh
 python scripts/jeff_peft_merge.py \
-  --model "$BASE_MODEL" \
+  --base "$BASE_MODEL" \
   --adapter "$HOME/Models/jeff/adapters/jeff-adapter-triage" \
   --output "$HOME/Models/jeff-published/triage"
 ```
+
+This works for any of the 13 official adapters on [jeffhub.ai](https://jeffhub.ai/#adapters) (`mstrasser/jeff-adapter-<name>`, revision `v1.3`), not only these four. Check the licence first (`sanctions` and `soc` are non-commercial) and see [Import any jeffhub adapter](docs/ADAPTERS.md#import-any-jeffhub-adapter) for the steps, checks and limits.
 
 ### 3. Core AI export
 
