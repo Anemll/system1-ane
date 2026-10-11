@@ -2,7 +2,7 @@
 
     python3 -m projects.tetris_training.relabel GAMES... -o OUT_DIR [--teacher search2] [--mode distill|awr]
 
-Input: game files exported from the app (``.jsonl``), gzipped archives of them (``.jsonl.gz``), or a folder of either.
+Input: archives made by ``ios/tools/archive_daily.py`` (``games-*.jsonl.gz``), an app export (``.jsonl``) or a folder of either.
 Each game is ``{id, decisions: [{board, piece, pick, oracle, probs, ...}], lines, pieces, toppedOut, capped}``; options are rebuilt
 from (board, piece) with ``jeff_tetris.placements`` so the rows match the training prompt exactly.
 
@@ -13,6 +13,8 @@ What each decision gets:
                     lets the student exceed the heuristic it was taught by.
 * ``regret``        teacher value of the best placement minus the placement the model played. Near-ties have ~0 regret and teach
                     nothing; real mistakes have large regret.
+* ``censored``      true for the last ``--horizon`` moves of a game that did not end in a game over (cap, New game, session
+                    end): their return is cut short, so they are excluded from baselines and from ``awr`` rows.
 * ``reward``/``return``/``advantage``  lines cleared by the played move, the discounted return over the next ``--horizon``
                     moves (minus a penalty if the game topped out inside it), and the return minus a baseline averaged over
                     similar states (stack height x piece). This is the sequence view used for offline RL.
@@ -120,6 +122,9 @@ def label_game(args) -> dict:
         if topped and n - i <= horizon:
             ret -= topout_penalty * (GAMMA ** (n - i))
         r["reward"], r["return"] = rewards[i], ret
+        # A game that ended without a game over (120-piece cap, New game, session end) has no future for its last moves, so
+        # their return is cut short and biased low. Mark them; they still serve distillation but not advantages or baselines.
+        r["censored"] = (not topped) and (n - i < horizon)
     return {"id": g["id"], "game": g, "decisions": out, "spawn_blocked": spawn_blocked, "dropped": len(decs) - len(out)}
 
 
@@ -162,7 +167,8 @@ def main() -> int:
     base = defaultdict(list)                            # baseline: mean return of similar states
     for r in labelled:
         for d in r["decisions"]:
-            base[bucket(d["board"], d["piece"])].append(d["return"])
+            if not d["censored"]:
+                base[bucket(d["board"], d["piece"])].append(d["return"])
     mean = {k: sum(v) / len(v) for k, v in base.items()}
 
     files = {s: open(a.out / f"{s}.jsonl", "w") for s in ("train", "heldout")}
@@ -173,8 +179,9 @@ def main() -> int:
     for r in labelled:
         split = split_of(r["id"], a.heldout)
         for i, d in enumerate(r["decisions"]):
-            adv = d["return"] - mean[bucket(d["board"], d["piece"])]
+            adv = 0.0 if d["censored"] else d["return"] - mean.get(bucket(d["board"], d["piece"]), d["return"])
             stats["decisions"] += 1
+            stats["censored"] += d["censored"]
             stats["model_eq_el"] += d["pick"] == d["el_key"]
             stats["model_eq_teacher"] += d["pick"] == d["teacher_key"]
             stats["teacher_ne_el"] += d["teacher_key"] != d["el_key"]
@@ -182,6 +189,8 @@ def main() -> int:
             stats["hard(regret>=%.0f)" % a.regret_cap] += d["regret"] >= a.regret_cap
             state_key = (T.board_text(d["board"]), d["piece"])
             if state_key in seen_state or d["regret"] < a.min_regret or len(d["options"]) < 2:
+                continue
+            if a.mode == "awr" and d["censored"]:      # no usable advantage for the tail of an unfinished game
                 continue
             seen_state.add(state_key)
             if a.mode == "distill":
@@ -209,6 +218,7 @@ def main() -> int:
               "teacher_differs_from_el_tetris": round(stats["teacher_ne_el"] / n, 4),
               "mean_model_regret": round(stats["regret_sum"] / n, 3),
               "hard_share": round(stats["hard(regret>=%.0f)" % a.regret_cap] / n, 4),
+              "censored_decisions": int(stats["censored"]),
               "games_reaching_spawn_blocked": blocked_games, "decisions_beyond_game_over_dropped": dropped,
               "lines_per_game_mean": round(sum(r["game"].get("lines", 0) for r in labelled) / max(1, len(labelled)), 2)}
     (a.out / "report.json").write_text(json.dumps(report, indent=1) + "\n")

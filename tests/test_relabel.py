@@ -56,7 +56,7 @@ class Relabel(unittest.TestCase):
             for mode in ("distill", "awr"):
                 out = tmp / mode
                 subprocess.run([sys.executable, "-m", "projects.tetris_training.relabel", str(tmp / "games-2026-10-10.jsonl.gz"),
-                                "-o", str(out), "--mode", mode, "--workers", "1", "--heldout", "0.25"], cwd=ROOT, check=True,
+                                "-o", str(out), "--mode", mode, "--workers", "1", "--heldout", "0.25", "--horizon", "3"], cwd=ROOT, check=True,
                                capture_output=True)
                 rep = json.loads((out / "report.json").read_text())
                 self.assertEqual(rep["games"], 8)
@@ -84,6 +84,14 @@ class Relabel(unittest.TestCase):
         self.assertTrue(res["spawn_blocked"])
         self.assertEqual(len(res["decisions"]), 2)           # only the states before the blocked spawn
         self.assertEqual(res["dropped"], len(g["decisions"]) - 2)
+
+    def test_partial_games_censor_the_unfinished_tail(self):
+        g = synthetic_game(7, moves=30)                      # capped / unfinished, not topped out
+        res = R.label_game((g, "el", 6, 10, 10.0))
+        flags = [d["censored"] for d in res["decisions"]]
+        self.assertEqual(flags, [False] * 21 + [True] * 9)   # a move with a full 10-move window left is complete
+        res2 = R.label_game((dict(g, toppedOut=True), "el", 6, 10, 10.0))
+        self.assertFalse(any(d["censored"] for d in res2["decisions"]))   # a real game over is a complete trajectory
 
     def test_return_to_go_and_topout_penalty(self):
         g = synthetic_game(3, moves=6)
