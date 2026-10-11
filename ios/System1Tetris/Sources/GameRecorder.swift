@@ -46,6 +46,7 @@ struct GameRecord: Codable {
     var pieces = 0
     var toppedOut = false
     var capped = false
+    var explore = false          // moves were sampled from the model's probabilities, not always the top one
     var decisions: [DecisionRecord] = []
 }
 
@@ -64,8 +65,8 @@ final class GameRecorder: ObservableObject {
         refresh()
     }
 
-    func begin(model: String, mode: String) {
-        current = GameRecord(id: UUID().uuidString.lowercased(), app: appVersion, model: model, mode: mode, started: Date())
+    func begin(model: String, mode: String, explore: Bool = false) {
+        current = GameRecord(id: UUID().uuidString.lowercased(), app: appVersion, model: model, mode: mode, started: Date(), explore: explore)
     }
 
     func add(_ d: DecisionRecord) { current?.decisions.append(d) }

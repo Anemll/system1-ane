@@ -19,3 +19,14 @@ for (i, c) in cases.enumerated() {
     print(i, "keys", okKeys, "text", okText, "ids", okIds, "oracle", okOracle, ids.count)
 }
 print(bad == 0 ? "ALL MATCH" : "MISMATCHES: \(bad)")
+
+// spawn rule parity (optional third argument: Tests/spawn.json)
+if a.count > 3 {
+    let spawn = try JSONSerialization.jsonObject(with: Data(contentsOf: URL(fileURLWithPath: a[3]))) as! [[String: Any]]
+    var badSpawn = 0
+    for c in spawn {
+        let rows = (c["board"] as! String).split(separator: "\n").map { $0.map { UInt8($0 == "#" ? 1 : 0) } }
+        if Tetris.spawnBlocked(rows, c["piece"] as! String) != (c["blocked"] as! Bool) { badSpawn += 1 }
+    }
+    print(badSpawn == 0 ? "SPAWN RULE MATCHES (\(spawn.count) boards)" : "SPAWN MISMATCHES: \(badSpawn)")
+}

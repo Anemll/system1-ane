@@ -132,7 +132,9 @@ def encode(model: Path, rows: list[dict], decision: dict, tokenizer) -> list[dic
     for row in rows:
         decision_row, index = as_decision(row)
         ids = prompt_ids(model, decision_row, decision, tokenizer)
-        encoded.append({"ids": ids, "label": index, "n": len(decision_row["question"]["criteria"])})
+        # optional per-row weight (relabel.py: regret weighting for distillation, advantage weighting for AWR); 1.0 when absent
+        weight = float(row.get("weight", 1.0)) if isinstance(row, dict) else 1.0
+        encoded.append({"ids": ids, "label": index, "n": len(decision_row["question"]["criteria"]), "weight": weight})
     return encoded
 
 
@@ -221,7 +223,9 @@ def run_epoch(model, readout, rows, batch_size, pad_id, device, optimizer=None,
             with torch.enable_grad():
                 optimizer.zero_grad(set_to_none=True)
                 logits = masked_logits(forward_logits(model, readout, ids, mask, index, device), batch)
-                loss = torch.nn.functional.cross_entropy(logits, labels)
+                per_row = torch.nn.functional.cross_entropy(logits, labels, reduction="none")
+                w = torch.tensor([float(r.get("weight", 1.0)) for r in batch], dtype=per_row.dtype, device=per_row.device)
+                loss = (per_row * w).sum() / w.sum().clamp_min(1e-8)   # weights are 1.0 unless the rows carry them
                 loss.backward()
                 torch.nn.utils.clip_grad_norm_([p for group in optimizer.param_groups for p in group["params"]], 1.0)
                 optimizer.step()

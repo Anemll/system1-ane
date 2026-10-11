@@ -183,6 +183,7 @@ struct ContentView: View {
             Button("New game") { game.newGame() }.buttonStyle(.bordered)
             Menu {
                 Button("Saved games…", systemImage: "square.and.arrow.up") { showData = true }
+                Button(game.explore ? "Explore: on (tap to turn off)" : "Explore: sample moves", systemImage: "dice") { game.explore.toggle() }
                 Button("Re-download model", systemImage: "arrow.clockwise") { game.redownloadModel() }
                             } label: { Image(systemName: "ellipsis.circle").font(.title3) }
             Button { recorder.toggle() } label: {

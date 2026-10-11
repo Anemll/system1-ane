@@ -55,6 +55,13 @@ enum Tetris {
         }
         return true
     }
+    /// The demo's and the evaluation's game-over rule: the piece's centered, unrotated spawn overlaps filled cells.
+    static func spawnBlocked(_ b: Board, _ piece: String) -> Bool {
+        let shape = pieces[piece]![0]
+        let col = (width - shape.map(\.c).max()! - 1) / 2
+        return shape.contains { b[$0.r][col + $0.c] != 0 }
+    }
+
     static func dropRow(_ b: Board, _ shape: [Cell], _ col: Int) -> Int? {
         if !fits(b, shape, 0, col) { return nil }
         var row = 0

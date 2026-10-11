@@ -10,7 +10,7 @@ It is the on-device port of the Mac demo in this repository (`coreai/`, `scripts
 - Shows the model's top options with probabilities, the El-Tetris label, latency, prompt size and the ANE call times, so you can see the model, not a rule-based player, is deciding.
 - 20-game sessions (a game ends at 120 pieces or on top-out), best score kept across launches.
 - Screen recording button (ReplayKit).
-- Every finished game is saved on the device as encrypted JSON (decisions only: board, piece, the model's probabilities and choice, the El-Tetris label; no identifiers) and can be exported from the app (Saved games). `tools/games_to_rows.py` turns an export into adapter-kit training rows. **The app has no networking for game data.**
+- Every finished game is saved on the device as encrypted JSON (decisions only: board, piece, the model's probabilities and choice, the El-Tetris label; no identifiers) and can be exported from the app (Saved games). `tools/games_to_rows.py` turns an export into adapter-kit rows, and `projects/tetris_training/relabel.py` relabels games with a stronger search teacher (see `docs/TETRIS_FLYWHEEL.md`). An **Explore** switch (ellipsis menu) samples moves from the model's own probabilities so the logs contain varied moves. **The app has no networking for game data.**
 
 ## Requirements
 

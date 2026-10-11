@@ -54,6 +54,7 @@ final class GameModel: ObservableObject {
     enum Mode: String, CaseIterable { case realtime = "Real-time", fast = "Fast" }
     @Published var mode: Mode = .realtime
     @Published var overrides = 0
+    @Published var explore = false   // sample moves from the model's own probabilities instead of always taking the top one
     @Published var callMs: [Double] = []
     @Published var modelName = ""
 
@@ -151,7 +152,7 @@ final class GameModel: ObservableObject {
     }
 
     private func resetBoard() {
-        recorder.begin(model: modelName, mode: mode.rawValue)
+        recorder.begin(model: modelName, mode: mode.rawValue, explore: explore)
         board = Tetris.emptyBoard(); lines = 0; pieces = 0; top = []; fall = nil
         piece = randomPiece(); nextPiece = randomPiece()
     }
@@ -171,11 +172,18 @@ final class GameModel: ObservableObject {
     private func decide(_ e: JeffEngine, board: Tetris.Board, piece: String) -> Task<Result?, Error> {
         Task.detached(priority: .userInitiated) {
             let options = Tetris.placements(board, piece)
-            guard !options.isEmpty else { return nil }
+            guard !options.isEmpty, !Tetris.spawnBlocked(board, piece) else { return nil }   // game over
             let ids = e.tokens(for: Prompt.text(board: board, piece: piece, options: options, codes: e.codes))
             let d = try await e.decide(ids: ids, nOptions: options.count)
             return Result(board: board, piece: piece, options: options, oracle: Tetris.oracleKey(options), decision: d)
         }
+    }
+
+    /// Index drawn from a probability vector (the model's calibrated distribution, temperature already applied).
+    private static func sample(_ p: [Float]) -> Int {
+        var u = Float.random(in: 0..<1)
+        for (i, x) in p.enumerated() { u -= x; if u < 0 { return i } }
+        return p.count - 1
     }
 
     private func loop(_ e: JeffEngine) async {
@@ -197,16 +205,18 @@ final class GameModel: ObservableObject {
                     pending = decide(e, board: binary(board), piece: piece); continue
                 }
                 let myEpoch = epoch
-                recorder.add(DecisionRecord(board: Tetris.boardText(r.board), piece: r.piece, pick: r.options[r.decision.best].key, oracle: r.oracle,
+                let d = r.decision
+                let chosen = explore ? Self.sample(d.probabilities) : d.best
+                let pick = r.options[chosen]
+                recorder.add(DecisionRecord(board: Tetris.boardText(r.board), piece: r.piece, pick: r.options[chosen].key, oracle: r.oracle,
                                             probs: r.decision.probabilities.map { (($0 * 1000).rounded() / 1000) }, ms: Int(r.decision.totalMs), tokens: r.decision.tokens))
-                let d = r.decision, pick = r.options[d.best]
                 appLog("piece \(r.piece) pick \(pick.key) oracle \(r.oracle ?? "-") conf \(d.probabilities[d.best]) tok \(d.tokens) ms \(Int(d.totalMs)) calls \(d.callMs.map { Int($0) })")
                 lastMs = d.totalMs; msSum += d.totalMs; decided += 1; avgMs = msSum / Double(decided)
                 tokens = d.tokens; calls = d.calls; callMs = d.callMs; confidence = d.probabilities[d.best]
                 if pick.key == r.oracle { agree += 1 } else { overrides += 1 }
                 top = d.probabilities.indices.sorted { d.probabilities[$0] > d.probabilities[$1] }.prefix(4).map {
                     OptionScore(id: r.options[$0].key, text: "\(r.options[$0].key)  \(Tetris.describe(r.piece, r.options[$0]).components(separatedBy: ", ").dropFirst().prefix(2).joined(separator: ", "))",
-                                probability: d.probabilities[$0], isOracle: r.options[$0].key == r.oracle, isPick: $0 == d.best)
+                                probability: d.probabilities[$0], isOracle: r.options[$0].key == r.oracle, isPick: $0 == chosen)
                 }
                 // The board after this move is known now, so the next decision runs on the ANE while the piece animates.
                 let id = Self.pieceId[piece]!
