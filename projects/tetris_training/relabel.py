@@ -2,7 +2,7 @@
 
     python3 -m projects.tetris_training.relabel GAMES... -o OUT_DIR [--teacher search2] [--mode distill|awr]
 
-Input: archives made by ``ios/tools/archive_daily.py`` (``games-*.jsonl.gz``), an app export (``.jsonl``) or a folder of either.
+Input: game files exported from the app (``.jsonl``), gzipped archives of them (``.jsonl.gz``), or a folder of either.
 Each game is ``{id, decisions: [{board, piece, pick, oracle, probs, ...}], lines, pieces, toppedOut, capped}``; options are rebuilt
 from (board, piece) with ``jeff_tetris.placements`` so the rows match the training prompt exactly.
 
