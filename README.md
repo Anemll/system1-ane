@@ -58,7 +58,7 @@ Screenshots of the browser demo served by `system1-ane-serve` on an M5 Max (ever
 - **Apple Silicon Mac** (measured on **M5 Max**, macOS 27.2). The ANE compile mode is chosen per chip and can differ between Macs: M5 family uses bonded mode 1, M6 uses mode 2 (override: `MPSGRAPH_ANE_BONDED_COMPILE_MODE`; see [docs/ANE_COMPILE_MODE_POLICY.md](docs/ANE_COMPILE_MODE_POLICY.md)). A fresh-machine run on an **M6** (macOS 27.0.1, mode 2) loaded all four builds below together.
 - **macOS 27 with Core AI** (the Swift bridge builds with Xcode / `xcrun swiftc`).
 - **Python 3.11+** for the host venv (transformers, torch: train / tokenize / `forge.py`). macOS's own `/usr/bin/python3` is 3.9 and will not work: install 3.11 (for example `brew install python@3.11`) and use `python3.11`.
-- **Core AI SDK Python** (`COREAI_PYTHON`): a separate venv, Python 3.11-3.13, created in Quick start step 2 from the Core AI packages on PyPI. Compile and serve need only `coreai-core` (it provides `coreai.runtime`); convert also needs `coreai-torch` and `coreai-opt` ([requirements-conversion.txt](requirements-conversion.txt)). **Set `COREAI_PYTHON` whenever you run `forge.py` from the host venv**, otherwise those commands use the host interpreter, which has no Core AI.
+- **Core AI SDK Python** (`COREAI_PYTHON`): a separate venv, Python 3.11-3.13, created in Quick start step 2 from the Core AI packages on PyPI. Compile and serve need `coreai-core` (it provides `coreai.runtime`) plus `safetensors` and `packaging` (the serve path reads `model.safetensors`; `safetensors.torch` imports `packaging`); convert also needs `coreai-torch` and `coreai-opt` ([requirements-conversion.txt](requirements-conversion.txt)). **Set `COREAI_PYTHON` whenever you run `forge.py` from the host venv**, otherwise those commands use the host interpreter, which has no Core AI.
 
 Model weights are not in Git. `scripts/download_model.py` fetches the prebuilt Core AI demo builds from Hugging Face; training uses a local `jeff-base` v1.3 checkpoint.
 
@@ -86,11 +86,11 @@ python -m pip install --upgrade pip
 python -m pip install -r requirements-inference.txt
 
 # 2. Core AI SDK interpreter (loads/compiles ANE packages): its own venv (Python 3.11-3.13), pinned to the version this repo was tested with.
-#    coreai-core is enough for compile + serve; torch is also needed to serve the stock Unsloth build.
+#    compile + serve: coreai-core, safetensors, packaging; torch is also needed to serve the stock Unsloth build.
 #    For convert, also: pip install -r requirements-conversion.txt
 python3.11 -m venv "$HOME/venvs/coreai"
 "$HOME/venvs/coreai/bin/python" -m pip install --upgrade pip
-"$HOME/venvs/coreai/bin/python" -m pip install coreai-core==1.0.0b2 "torch>=2.6"
+"$HOME/venvs/coreai/bin/python" -m pip install coreai-core==1.0.0b2 "torch>=2.6" safetensors packaging
 export COREAI_PYTHON="$HOME/venvs/coreai/bin/python"   # required whenever forge.py runs from the host venv
 bash coreai/swift_bridge/build.sh     # writes coreai/swift_bridge/libcoreai_bridge.dylib (default loader path)
 
