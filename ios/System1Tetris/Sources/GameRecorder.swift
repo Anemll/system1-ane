@@ -33,6 +33,10 @@ struct DecisionRecord: Codable {
     let probs: [Float]       // model probabilities in placements() order, rounded
     let ms: Int
     let tokens: Int
+    // scored on the phone, for free: the El-Tetris ratings are already computed to build the prompt
+    var regret: Float? = nil   // El-Tetris rating of the best placement minus the one played (0 = it played the best)
+    var reward: Int? = nil     // lines cleared by the move
+    var entropy: Float? = nil  // of the model's distribution, in nats
 }
 
 struct GameRecord: Codable {
@@ -47,6 +51,10 @@ struct GameRecord: Codable {
     var toppedOut = false
     var capped = false
     var explore = false          // moves were sampled from the model's probabilities, not always the top one
+    var seed: String? = nil      // hex SplitMix64 seed of the piece sequence: the game can be replayed exactly
+    var meanRegret: Float? = nil // game summary, computed when the game ends
+    var mistakes = 0             // confident (>= 0.9) decisions that differed from El-Tetris
+    var hardMoves = 0            // decisions with regret >= 8
     var decisions: [DecisionRecord] = []
 }
 
@@ -65,8 +73,9 @@ final class GameRecorder: ObservableObject {
         refresh()
     }
 
-    func begin(model: String, mode: String, explore: Bool = false) {
-        current = GameRecord(id: UUID().uuidString.lowercased(), app: appVersion, model: model, mode: mode, started: Date(), explore: explore)
+    func begin(model: String, mode: String, explore: Bool = false, seed: UInt64 = 0) {
+        current = GameRecord(id: UUID().uuidString.lowercased(), app: appVersion, model: model, mode: mode, started: Date(), explore: explore,
+                             seed: String(seed, radix: 16))
     }
 
     func add(_ d: DecisionRecord) { current?.decisions.append(d) }
@@ -77,6 +86,11 @@ final class GameRecorder: ObservableObject {
         current = nil
         guard g.decisions.count >= 3 else { return }
         g.lines = lines; g.pieces = pieces; g.toppedOut = toppedOut; g.capped = capped
+        let regrets = g.decisions.compactMap(\.regret)
+        g.meanRegret = regrets.isEmpty ? nil : (regrets.reduce(0, +) / Float(regrets.count) * 1000).rounded() / 1000
+        g.hardMoves = regrets.filter { $0 >= 8 }.count
+        g.mistakes = g.decisions.filter { ($0.probs.max() ?? 0) >= 0.9 && $0.oracle != nil && $0.pick != $0.oracle }.count
+        appLog("game \(g.id.prefix(8)) seed \(g.seed ?? "-") decisions \(g.decisions.count) lines \(lines) meanRegret \(g.meanRegret ?? -1) mistakes \(g.mistakes) hard \(g.hardMoves) explore \(g.explore)")
         let enc = JSONEncoder(); enc.dateEncodingStrategy = .iso8601; enc.outputFormatting = [.sortedKeys]
         if let data = try? enc.encode(g), let sealed = GameVault.seal(data) {
             try? sealed.write(to: dir.appendingPathComponent("\(g.id).game"), options: [.atomic, .completeFileProtection])

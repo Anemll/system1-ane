@@ -159,6 +159,11 @@ final class JeffEngine {
         embOffset = 10 + hlen
     }
 
+    static func freeGB() -> String {
+        let v = try? URL(fileURLWithPath: NSHomeDirectory()).resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey])
+        return String(format: "%.1f", Double(v?.volumeAvailableCapacityForImportantUsage ?? 0) / 1e9)
+    }
+
     var modelName: String { "\(man.convert?.model ?? "jeff") · \(man.chunks.count) chunks · fp16 · \(entry)" }
 
     var entry: String { "p\(TP)_\(man.pctxs[0] / 1024)k" }
@@ -171,8 +176,12 @@ final class JeffEngine {
             let t1 = Date()
             onProgress?("Loading \(spec.file)")
             let ch = Chunk(spec)
-            ch.model = try await AIModel(contentsOf: build.appendingPathComponent(spec.file), options: computeUnit)
-            guard let f = try ch.model.loadFunction(named: entry) else { throw EngineError("\(spec.file): no function \(entry)") }
+            do { ch.model = try await AIModel(contentsOf: build.appendingPathComponent(spec.file), options: computeUnit) }
+            catch { throw EngineError("\(spec.file): \(String(reflecting: error)) (free space \(Self.freeGB()) GB)") }
+            let loaded: AnyObject?
+            do { loaded = try ch.model.loadFunction(named: entry) as AnyObject? }
+            catch { throw EngineError("\(spec.file) loadFunction: \(String(reflecting: error)) \(error as NSError)") }
+            guard loaded != nil, let f = try ch.model.loadFunction(named: entry) else { throw EngineError("\(spec.file): no function \(entry)") }
             ch.fn = Fn(f)
             let stateBases = ["conv", "rec", "pend"]
             for (name, s) in ch.fn.inputs {

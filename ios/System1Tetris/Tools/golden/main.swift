@@ -20,6 +20,18 @@ for (i, c) in cases.enumerated() {
 }
 print(bad == 0 ? "ALL MATCH" : "MISMATCHES: \(bad)")
 
+// seeded piece sequence parity (optional fourth argument: Tests/seeds.json)
+if a.count > 4 {
+    let seeds = try JSONSerialization.jsonObject(with: Data(contentsOf: URL(fileURLWithPath: a[4]))) as! [[String: Any]]
+    var badSeeds = 0
+    for c in seeds {
+        var g = SplitMix64(seed: UInt64(c["seed"] as! String, radix: 16)!)
+        let got = (0..<(c["pieces"] as! String).count).map { _ in g.nextPiece() }.joined()
+        if got != (c["pieces"] as! String) { badSeeds += 1 }
+    }
+    print(badSeeds == 0 ? "SEEDED PIECES MATCH PYTHON (\(seeds.count) seeds)" : "SEED MISMATCHES: \(badSeeds)")
+}
+
 // spawn rule parity (optional third argument: Tests/spawn.json)
 if a.count > 3 {
     let spawn = try JSONSerialization.jsonObject(with: Data(contentsOf: URL(fileURLWithPath: a[3]))) as! [[String: Any]]

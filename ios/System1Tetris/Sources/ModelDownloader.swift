@@ -7,7 +7,44 @@ final class ModelDownloader: ObservableObject {
     @Published var fraction = 0.0
     @Published var detail = ""
     @Published var busy = false
+    @Published var bytesDone: Int64 = 0
+    @Published var bytesTotal: Int64 = 0      // 0 until the file list has been fetched ("Starting...")
+    @Published var speedMBps = 0.0
+    private var startedAt = Date()
+    @Published var allowCellular = false   // 1.4 GB: Wi-Fi only unless the user allows cellular data
+    @Published var needsWifi = false       // the last attempt was refused because only cellular was available
+
+    private func makeSession() -> URLSession {
+        let c = URLSessionConfiguration.default
+        c.allowsExpensiveNetworkAccess = allowCellular      // cellular, personal hotspot
+        c.allowsConstrainedNetworkAccess = allowCellular    // Low Data Mode
+        c.timeoutIntervalForRequest = 60
+        return URLSession(configuration: c)
+    }
+
+    /// Plain-language message for a failed download.
+    static func friendly(_ e: Error) -> String {
+        guard let u = e as? URLError else { return e.localizedDescription }
+        switch u.code {
+        case .notConnectedToInternet, .dataNotAllowed:
+            return u.networkUnavailableReason == .expensive || u.networkUnavailableReason == .constrained
+                ? "The model is 1.4 GB, so it downloads over Wi-Fi only. Connect to Wi-Fi, or allow cellular data."
+                : "No internet connection. Check your network and tap Download again."
+        case .timedOut: return "The connection timed out. Check your network and tap Download to try again."
+        case .networkConnectionLost: return "The connection was lost. Tap Download to continue; files already finished are kept."
+        case .cannotFindHost, .cannotConnectToHost, .dnsLookupFailed: return "Could not reach Hugging Face. Check your network and try again."
+        default: return u.localizedDescription
+        }
+    }
+
+    /// Called synchronously from the button, so the card changes the instant it is tapped.
+    func begin() { cancelled = false; busy = true; error = nil; needsWifi = false; fraction = 0; bytesDone = 0; bytesTotal = 0; speedMBps = 0; detail = "Connecting to Hugging Face..."; startedAt = Date() }
     @Published var error: String?
+    private var session: URLSession?
+    private var cancelled = false
+
+    /// Stops the download now; files already finished are kept, so the next Download continues.
+    func cancel() { cancelled = true; session?.invalidateAndCancel() }
 
     private struct Entry: Decodable { let path: String; let size: Int?; let type: String }
 
@@ -20,27 +57,36 @@ final class ModelDownloader: ObservableObject {
     }
 
     func download(to root: URL) async -> Bool {
-        busy = true; error = nil; fraction = 0
+        if !busy { begin() }
         defer { busy = false }
         do {
             let listURL = URL(string: "https://huggingface.co/api/models/\(Self.repo)/tree/main?recursive=1")!
-            let (data, _) = try await URLSession.shared.data(from: listURL)
+            let session = makeSession()
+            self.session = session
+            let (data, _) = try await session.data(from: listURL)
             let files = try JSONDecoder().decode([Entry].self, from: data)
                 .filter { $0.type == "file" && ($0.path.hasPrefix("coreai/") || $0.path.hasPrefix("model/")) }
             let total = Double(files.reduce(0) { $0 + ($1.size ?? 0) })
+            bytesTotal = Int64(total)
             var done = 0.0
             for f in files {
                 let dest = root.appendingPathComponent(f.path)
                 let size = f.size ?? 0
                 if let a = try? FileManager.default.attributesOfItem(atPath: dest.path)[.size] as? Int, a == size {
-                    done += Double(size); fraction = done / total; continue
+                    done += Double(size); fraction = done / total; bytesDone = Int64(done); bytesDone = Int64(done); continue
                 }
                 detail = "\(f.path)  (\(ByteCountFormatter.string(fromByteCount: Int64(size), countStyle: .file)))"
                 try FileManager.default.createDirectory(at: dest.deletingLastPathComponent(), withIntermediateDirectories: true)
                 let url = URL(string: "https://huggingface.co/\(Self.repo)/resolve/main/\(f.path)")!
                 let base = done
-                let tmp = try await fetch(url) { [weak self] got in
-                    Task { @MainActor in self?.fraction = (base + Double(got)) / total }
+                let tmp = try await fetch(url, session: session) { [weak self] got in
+                    Task { @MainActor in
+                        guard let self else { return }
+                        self.fraction = (base + Double(got)) / total
+                        self.bytesDone = Int64(base) + got
+                        let t = Date().timeIntervalSince(self.startedAt)
+                        if t > 1 { self.speedMBps = Double(self.bytesDone) / t / 1_000_000 }
+                    }
                 }
                 try? FileManager.default.removeItem(at: dest)
                 try FileManager.default.moveItem(at: tmp, to: dest)
@@ -49,14 +95,16 @@ final class ModelDownloader: ObservableObject {
             detail = "Done"
             return Self.isInstalled(root)
         } catch {
-            self.error = "\(error.localizedDescription)"
+            if cancelled { detail = "Cancelled"; return false }
+            self.error = Self.friendly(error)
+            if let u = error as? URLError, u.networkUnavailableReason == .expensive || u.networkUnavailableReason == .constrained { needsWifi = true }
             return false
         }
     }
 
-    private func fetch(_ url: URL, progress: @escaping @Sendable (Int64) -> Void) async throws -> URL {
+    private func fetch(_ url: URL, session: URLSession, progress: @escaping @Sendable (Int64) -> Void) async throws -> URL {
         try await withCheckedThrowingContinuation { cont in
-            let task = URLSession.shared.downloadTask(with: url) { tmp, resp, err in
+            let task = session.downloadTask(with: url) { tmp, resp, err in
                 if let err { cont.resume(throwing: err); return }
                 guard let tmp, let http = resp as? HTTPURLResponse, http.statusCode == 200 else {
                     cont.resume(throwing: URLError(.badServerResponse)); return

@@ -46,6 +46,7 @@ struct ContentView: View {
         case .needsModel: card { downloadCard }
         case .loading: card { loadingCard }
         case .sessionDone: card { sessionCard }
+        case .cooling: card { coolingCard }
         case .failed(let msg): card { failedCard(msg) }
         default: EmptyView()
         }
@@ -63,18 +64,74 @@ struct ContentView: View {
     private var downloadCard: some View {
         Group {
             Image(systemName: "cpu").font(.system(size: 34)).foregroundStyle(.tint)
-            Text("Get the Tetris model").font(.headline)
-            Text("Jeff and the Tetris adapter, 1.4 GB from Hugging Face. It stays on this iPhone and runs on the Neural Engine.")
-                .font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.center)
+            Text(game.downloader.busy ? "Step 1 of 2: downloading the model" : "Get the Tetris model").font(.headline)
             if game.downloader.busy {
-                ProgressView(value: game.downloader.fraction)
-                Text(String(format: "%.0f%%  %@", game.downloader.fraction * 100, game.downloader.detail))
-                    .font(.caption2.monospaced()).foregroundStyle(.secondary).lineLimit(2).multilineTextAlignment(.center)
+                if game.downloader.bytesTotal == 0 {
+                    ProgressView()
+                    Text(game.downloader.detail).font(.footnote).foregroundStyle(.secondary)   // "Connecting to Hugging Face..."
+                } else {
+                    ProgressView(value: game.downloader.fraction)
+                    Text("\(megabytes(game.downloader.bytesDone)) of \(megabytes(game.downloader.bytesTotal))  ·  \(String(format: "%.0f%%", game.downloader.fraction * 100))"
+                         + (game.downloader.speedMBps > 0 ? String(format: "  ·  %.1f MB/s", game.downloader.speedMBps) : ""))
+                        .font(.caption.monospacedDigit())
+                    Text(game.downloader.detail).font(.caption2.monospaced()).foregroundStyle(.secondary).lineLimit(1)
+                }
+                Text("Keep the app open. Next, step 2 prepares the model for your Neural Engine.")
+                    .font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                Button("Cancel", role: .cancel) { game.downloader.cancel() }.buttonStyle(.bordered)
             } else {
+                Text("Jeff and the Tetris adapter: 1.4 GB, one time, from Hugging Face. Wi-Fi is recommended. Then a few minutes to prepare it for this iPhone's Neural Engine, only on first launch. It all stays on this iPhone.")
+                    .font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.center)
                 Button { game.downloadModel() } label: { Label("Download", systemImage: "arrow.down.circle.fill").frame(maxWidth: .infinity) }
                     .buttonStyle(.borderedProminent).controlSize(.large)
+                Toggle("Allow cellular data", isOn: Binding(get: { game.downloader.allowCellular }, set: { game.downloader.allowCellular = $0 }))
+                    .font(.footnote)
             }
-            if let e = game.downloader.error { Text(e).font(.caption).foregroundStyle(.red) }
+            if let e = game.downloader.error {
+                Text(e).font(.caption).foregroundStyle(.red).multilineTextAlignment(.center)
+                if game.downloader.needsWifi && !game.downloader.busy {
+                    Button("Use cellular data for this download") { game.downloader.allowCellular = true; game.downloadModel() }
+                        .buttonStyle(.bordered).font(.footnote)
+                }
+            }
+        }
+    }
+
+    private func megabytes(_ b: Int64) -> String {
+        b >= 1_000_000_000 ? String(format: "%.2f GB", Double(b) / 1e9) : String(format: "%.0f MB", Double(b) / 1e6)
+    }
+
+    private var loadingCard: some View {
+        Group {
+            ProgressView(value: Double(game.loadStep), total: Double(game.loadTotal))
+            Text("Step 2 of 2: preparing for the Neural Engine").font(.headline).multilineTextAlignment(.center)
+            Text("\(game.loadStep) of \(game.loadTotal) parts ready").font(.caption.monospacedDigit())
+            TimelineView(.periodic(from: .now, by: 1)) { ctx in
+                let el = Int(ctx.date.timeIntervalSince(game.loadStarted))
+                let left = game.loadRemaining(at: ctx.date).map { "  ·  about \(max(1, Int(($0 / 60).rounded(.up)))) min left" } ?? "  ·  estimating after the first part"
+                Text("Elapsed \(el / 60):\(String(format: "%02d", el % 60))" + left).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+            }
+            Text("First launch only: the model is compiled for this iPhone, which takes a few minutes. Later launches take seconds. Keep the app open; the game starts by itself.")
+                .font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.center)
+            Button("Cancel", role: .cancel) { game.cancelLoading() }.buttonStyle(.bordered)
+        }
+    }
+
+    private func failedCard(_ msg: String) -> some View {
+        Group {
+            Image(systemName: "exclamationmark.triangle.fill").font(.system(size: 30)).foregroundStyle(.orange)
+            Text("Could not start").font(.headline)
+            Text("The model could not be prepared for the Neural Engine. Try again first. If it fails again, restart the iPhone, then reopen the app. If that does not help, tap Recompile (no download). Re-download is in the ... menu as a last resort.")
+                .font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.center)
+            DisclosureGroup("How to restart the iPhone") {
+                Text("Press and release Volume Up, press and release Volume Down, then hold the Side button until the Apple logo appears. Or open Settings > General > Shut Down, then turn it on again.")
+                    .font(.footnote).foregroundStyle(.secondary)
+            }.font(.footnote)
+            ScrollView { Text(msg).font(.caption.monospaced()).textSelection(.enabled) }.frame(maxHeight: 80)
+            HStack {
+                Button("Try again") { game.start() }.buttonStyle(.bordered)
+                Button("Recompile") { game.recompileModel() }.buttonStyle(.bordered)
+            }
         }
     }
 
@@ -91,22 +148,13 @@ struct ContentView: View {
         }
     }
 
-    private var loadingCard: some View {
+    private var coolingCard: some View {
         Group {
-            ProgressView(value: Double(game.loadStep), total: Double(game.loadTotal))
-            Text("Loading Jeff on the Neural Engine").font(.headline)
-            Text("\(game.loadStep) of \(game.loadTotal) packages · \(game.status)").font(.caption.monospaced()).foregroundStyle(.secondary).lineLimit(2).multilineTextAlignment(.center)
-            Text("The first launch specializes the model for this iPhone and can take a few minutes.")
+            Image(systemName: "thermometer.high").font(.system(size: 34)).foregroundStyle(.orange)
+            Text("Cooling down").font(.headline)
+            Text("Your iPhone is hot, so play is paused to protect it. It resumes by itself when the phone has cooled.")
                 .font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.center)
-        }
-    }
-
-    private func failedCard(_ msg: String) -> some View {
-        Group {
-            Image(systemName: "exclamationmark.triangle.fill").font(.system(size: 30)).foregroundStyle(.orange)
-            Text("Could not start").font(.headline)
-            ScrollView { Text(msg).font(.caption.monospaced()).textSelection(.enabled) }.frame(maxHeight: 180)
-            Button("Try again") { game.start() }.buttonStyle(.bordered)
+            ProgressView()
         }
     }
 
@@ -117,6 +165,7 @@ struct ContentView: View {
             header("Jeff · Tetris adapter · on-device ANE")
             Picker("Mode", selection: $game.mode) { ForEach(GameModel.Mode.allCases, id: \.self) { Text($0.rawValue).tag($0) } }
                 .pickerStyle(.segmented).frame(maxWidth: 260)
+            thermalLine   // always visible: the iPhone does not expose degrees, only this four-level state
             HStack(alignment: .top, spacing: 12) {
                 BoardView(game: game).aspectRatio(0.5, contentMode: .fit)
                 sidebar.frame(width: 150, alignment: .topLeading)
@@ -125,6 +174,32 @@ struct ContentView: View {
             Spacer(minLength: 0)
             controls
         }.padding(.horizontal, 16).padding(.vertical, 8).frame(maxHeight: .infinity, alignment: .top)
+    }
+
+    private var thermalState: (name: String, color: Color) {
+        switch game.thermal {
+        case .nominal: return ("Nominal", .green)
+        case .fair: return ("Fair: slowing down", .yellow)
+        case .serious: return ("Hot: playing slowly", .orange)
+        case .critical: return ("Too hot: paused", .red)
+        @unknown default: return ("Unknown", .gray)
+        }
+    }
+
+    private var thermalLine: some View {
+        let t = thermalState
+        let ratio = game.aneColdMs > 0 ? game.aneNowMs / game.aneColdMs : 1
+        let lowPower = ProcessInfo.processInfo.isLowPowerModeEnabled
+        return HStack(spacing: 6) {
+            Image(systemName: "thermometer.medium").foregroundStyle(t.color)
+            Text("Thermal \(t.name)").foregroundStyle(t.color)
+            if game.aneNowMs > 0 {
+                Text(String(format: "· ANE %.0f ms (cold %.0f, x%.1f)", game.aneNowMs, game.aneColdMs, ratio))
+                    .foregroundStyle(ratio > 1.3 ? Color.orange : Color.secondary)
+            }
+            if lowPower { Text("· Low Power").foregroundStyle(.yellow) }
+        }
+        .font(.caption2.monospacedDigit()).lineLimit(1).minimumScaleFactor(0.7).frame(height: 16)
     }
 
     private var sidebar: some View {
