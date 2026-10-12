@@ -151,6 +151,7 @@ final class GameModel: ObservableObject {
     }
 
     func downloadModel() {
+        guard !downloader.busy else { return }     // a second tap must never start a second download
         downloader.begin()          // instant feedback: the card switches to "Starting..." before any network call
         Task {
             if await downloader.download(to: Self.root) { start() }

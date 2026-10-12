@@ -5,6 +5,7 @@ struct ContentView: View {
     @StateObject private var recorder = ScreenRecorder()
     @State private var showLog = false
     @State private var showData = false
+    @State private var downloadTapped = false
     @State private var exportItem: ShareItem?
     @Environment(\.colorScheme) private var scheme
 
@@ -24,6 +25,7 @@ struct ContentView: View {
         .sheet(item: Binding(get: { recorder.lastFile.map { ShareItem(url: $0) } }, set: { if $0 == nil { recorder.lastFile = nil } })) { item in
             ShareSheet(url: item.url)
         }
+        .onChange(of: game.downloader.busy) { _, busy in if !busy { downloadTapped = false } }
         .sheet(isPresented: $showData) { dataSheet }
         .sheet(item: $exportItem) { ShareSheet(url: $0.url) }
     }
@@ -61,14 +63,20 @@ struct ContentView: View {
         }.transition(.opacity)
     }
 
+    /// True from the instant of the tap (local state, no network involved) until the download ends.
+    private var downloadBusy: Bool { game.downloader.busy || downloadTapped }
+
     private var downloadCard: some View {
         Group {
             Image(systemName: "cpu").font(.system(size: 34)).foregroundStyle(.tint)
-            Text(game.downloader.busy ? "Step 1 of 2: downloading the model" : "Get the Tetris model").font(.headline)
-            if game.downloader.busy {
+            Text(downloadBusy ? "Step 1 of 2: downloading the model" : "Get the Tetris model").font(.headline)
+            if downloadBusy {
                 if game.downloader.bytesTotal == 0 {
                     ProgressView()
-                    Text(game.downloader.detail).font(.footnote).foregroundStyle(.secondary)   // "Connecting to Hugging Face..."
+                    TimelineView(.periodic(from: .now, by: 1)) { ctx in
+                        Text("\(game.downloader.phase)...  \(Int(ctx.date.timeIntervalSince(game.downloader.startedAt))) s")
+                            .font(.footnote.monospacedDigit()).foregroundStyle(.secondary)
+                    }
                 } else {
                     ProgressView(value: game.downloader.fraction)
                     Text("\(megabytes(game.downloader.bytesDone)) of \(megabytes(game.downloader.bytesTotal))  ·  \(String(format: "%.0f%%", game.downloader.fraction * 100))"
@@ -82,15 +90,15 @@ struct ContentView: View {
             } else {
                 Text("Jeff and the Tetris adapter: 1.4 GB, one time, from Hugging Face. Wi-Fi is recommended. Then a few minutes to prepare it for this iPhone's Neural Engine, only on first launch. It all stays on this iPhone.")
                     .font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.center)
-                Button { game.downloadModel() } label: { Label("Download", systemImage: "arrow.down.circle.fill").frame(maxWidth: .infinity) }
+                Button { downloadTapped = true; game.downloadModel() } label: { Label("Download", systemImage: "arrow.down.circle.fill").frame(maxWidth: .infinity) }
                     .buttonStyle(.borderedProminent).controlSize(.large)
                 Toggle("Allow cellular data", isOn: Binding(get: { game.downloader.allowCellular }, set: { game.downloader.allowCellular = $0 }))
                     .font(.footnote)
             }
             if let e = game.downloader.error {
                 Text(e).font(.caption).foregroundStyle(.red).multilineTextAlignment(.center)
-                if game.downloader.needsWifi && !game.downloader.busy {
-                    Button("Use cellular data for this download") { game.downloader.allowCellular = true; game.downloadModel() }
+                if game.downloader.needsWifi && !downloadBusy {
+                    Button("Use cellular data for this download") { game.downloader.allowCellular = true; downloadTapped = true; game.downloadModel() }
                         .buttonStyle(.bordered).font(.footnote)
                 }
             }

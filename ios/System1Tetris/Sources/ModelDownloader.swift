@@ -10,8 +10,9 @@ final class ModelDownloader: ObservableObject {
     @Published var bytesDone: Int64 = 0
     @Published var bytesTotal: Int64 = 0      // 0 until the file list has been fetched ("Starting...")
     @Published var speedMBps = 0.0
-    private var startedAt = Date()
+    private(set) var startedAt = Date()
     @Published var allowCellular = false   // 1.4 GB: Wi-Fi only unless the user allows cellular data
+    @Published var phase = ""              // what the downloader is doing right now, for the Connecting screen
     @Published var needsWifi = false       // the last attempt was refused because only cellular was available
 
     private func makeSession() -> URLSession {
@@ -38,7 +39,7 @@ final class ModelDownloader: ObservableObject {
     }
 
     /// Called synchronously from the button, so the card changes the instant it is tapped.
-    func begin() { cancelled = false; busy = true; error = nil; needsWifi = false; fraction = 0; bytesDone = 0; bytesTotal = 0; speedMBps = 0; detail = "Connecting to Hugging Face..."; startedAt = Date() }
+    func begin() { cancelled = false; busy = true; error = nil; needsWifi = false; fraction = 0; bytesDone = 0; bytesTotal = 0; speedMBps = 0; detail = "Connecting to Hugging Face..."; phase = "Connecting"; startedAt = Date(); appLog("download: begin") }
     @Published var error: String?
     private var session: URLSession?
     private var cancelled = false
@@ -56,14 +57,27 @@ final class ModelDownloader: ObservableObject {
             }
     }
 
+    private var running = false
+
     func download(to root: URL) async -> Bool {
+        guard !running else { return false }
+        running = true; defer { running = false }
         if !busy { begin() }
         defer { busy = false }
         do {
             let listURL = URL(string: "https://huggingface.co/api/models/\(Self.repo)/tree/main?recursive=1")!
             let session = makeSession()
             self.session = session
-            let (data, _) = try await session.data(from: listURL)
+            var data = Data()
+            for attempt in 1...3 {      // a stalled first request is retried quickly instead of waiting out the long timeout
+                phase = attempt == 1 ? "Contacting Hugging Face" : "Contacting Hugging Face (try \(attempt) of 3)"
+                detail = phase
+                let t0 = Date()
+                var req = URLRequest(url: listURL); req.timeoutInterval = 10
+                do { data = try await session.data(for: req).0; appLog("download: file list in \(String(format: "%.1f", Date().timeIntervalSince(t0)))s (try \(attempt))"); break }
+                catch { appLog("download: file list try \(attempt) failed after \(String(format: "%.1f", Date().timeIntervalSince(t0)))s: \(error.localizedDescription)"); if attempt == 3 { throw error } }
+            }
+            phase = "Preparing the download"
             let files = try JSONDecoder().decode([Entry].self, from: data)
                 .filter { $0.type == "file" && ($0.path.hasPrefix("coreai/") || $0.path.hasPrefix("model/")) }
             let total = Double(files.reduce(0) { $0 + ($1.size ?? 0) })
@@ -76,6 +90,7 @@ final class ModelDownloader: ObservableObject {
                     done += Double(size); fraction = done / total; bytesDone = Int64(done); bytesDone = Int64(done); continue
                 }
                 detail = "\(f.path)  (\(ByteCountFormatter.string(fromByteCount: Int64(size), countStyle: .file)))"
+                appLog("download: start \(f.path)")
                 try FileManager.default.createDirectory(at: dest.deletingLastPathComponent(), withIntermediateDirectories: true)
                 let url = URL(string: "https://huggingface.co/\(Self.repo)/resolve/main/\(f.path)")!
                 let base = done
